@@ -11,9 +11,8 @@ def setup_files():
         "templates/app.html": APP,
     }
     for path, content in text_files.items():
-        if not os.path.exists(path):
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
 
     bin_files = {
         "static/logo.png": LOGO_B64,
@@ -342,10 +341,6 @@ body::before{content:'';position:absolute;top:-50%;right:-50%;width:100%;height:
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}
-    </div>
-    <div class="hint">
-        CEO: <b>drago</b> / <b>helios2026</b><br>
-        Служители: <b>ivan, maria, petar, georgi, elena</b> / <b>1234</b>
     </div>
 </div>
 </body>
@@ -723,12 +718,12 @@ async function loadAdmin(){
   let html=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center"><span>Служители</span><button class="btn-outline btn-sm" onclick="openAddUser()">+ Нов служител</button></div>`;
   users.forEach(u=>{
     html+=`<div class="admin-card"><div class="admin-card-left"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><div><div class="admin-name">${u.display_name}</div><div class="admin-sub">@${u.username}</div></div></div>
-      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\\\'")}','${u.username}','${u.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\\\'")}')">Изтрий</button></div></div>`;
+      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
   });
   html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>Проекти</span><button class="btn-outline btn-sm" onclick="openProjectModal()">+ Нов проект</button></div>`;
   projs.forEach(p=>{
     html+=`<div class="admin-card"><div class="admin-card-left"><span class="proj-dot" style="background:${p.color}"></span><div><div class="admin-name">${p.name}</div><div class="admin-sub">${p.total_tasks} задачи / ${p.done_tasks} готови</div></div></div>
-      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditProject(${p.id},'${p.name.replace(/'/g,"\\\\'")}','${p.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteProject(${p.id},'${p.name.replace(/'/g,"\\\\'")}')">Изтрий</button></div></div>`;
+      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditProject(${p.id},'${p.name.replace(/'/g,"\\'")}','${p.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteProject(${p.id},'${p.name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
   });
   document.getElementById('v-admin').innerHTML=html;
 }
