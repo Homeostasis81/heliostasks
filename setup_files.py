@@ -1,27 +1,15 @@
 import os, base64
 
 def setup_files():
-    """Auto-create static/ and templates/ directories with all files."""
     os.makedirs("static", exist_ok=True)
     os.makedirs("templates", exist_ok=True)
-
-    text_files = {
-        "static/style.css": CSS,
-        "templates/login.html": LOGIN,
-        "templates/app.html": APP,
-    }
+    text_files = {"static/style.css": CSS, "templates/login.html": LOGIN, "templates/app.html": APP}
     for path, content in text_files.items():
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-    bin_files = {
-        "static/logo.png": LOGO_B64,
-        "static/boat.png": BOAT_B64,
-    }
+        with open(path, "w", encoding="utf-8") as f: f.write(content)
+    bin_files = {"static/logo.png": LOGO_B64, "static/boat.png": BOAT_B64}
     for path, b64data in bin_files.items():
         if not os.path.exists(path):
-            with open(path, "wb") as f:
-                f.write(base64.b64decode(b64data))
+            with open(path, "wb") as f: f.write(base64.b64decode(b64data))
 
 CSS = r'''/* === Helios Marine Tasks — Dark Premium Theme === */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
@@ -63,6 +51,37 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg-de
 .user-badge{font-size:10px;color:var(--gold);background:var(--gold-dim);padding:3px 10px;border-radius:20px;font-weight:600;letter-spacing:.5px}
 .logout-btn{color:var(--text-muted);padding:6px;display:flex;border-radius:8px;transition:all .15s;text-decoration:none}
 .logout-btn:hover{color:var(--accent-red);background:rgba(248,81,73,.08)}
+
+/* === Notifications === */
+.notif-btn{position:relative;background:none;border:none;color:var(--text-secondary);padding:6px;cursor:pointer;border-radius:8px;display:flex;align-items:center;transition:all .15s}
+.notif-btn:hover{color:var(--gold);background:var(--bg-surface)}
+.notif-badge{position:absolute;top:0;right:0;background:var(--accent-red);color:white;font-size:10px;font-weight:600;border-radius:10px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--bg-deep)}
+.notif-popup{position:absolute;top:50px;right:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:280px;max-width:calc(100vw - 32px);z-index:90;box-shadow:0 8px 32px rgba(0,0,0,.4);overflow:hidden;display:none}
+.notif-popup.show{display:block;animation:slideDown .18s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notif-header{padding:12px 16px;border-bottom:1px solid var(--border-light);font-size:13px;font-weight:600;color:var(--text-primary)}
+.notif-list{padding:6px 0}
+.notif-item{padding:10px 16px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-secondary);cursor:pointer;transition:background .12s}
+.notif-item:hover{background:var(--bg-surface)}
+.notif-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.notif-content{flex:1;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.notif-count{font-weight:600;color:var(--text-primary)}
+.notif-empty{padding:24px 16px;text-align:center;color:var(--text-muted);font-size:12px}
+
+/* === Audit log === */
+.audit-list{max-height:240px;overflow-y:auto;background:var(--bg-deep);border-radius:8px;padding:8px;margin-top:8px}
+.audit-item{padding:8px 10px;border-bottom:1px solid var(--border-light);font-size:11px;color:var(--text-secondary);display:flex;gap:8px;align-items:flex-start}
+.audit-item:last-child{border-bottom:none}
+.audit-when{color:var(--text-muted);font-size:10px;white-space:nowrap}
+.audit-who{color:var(--gold);font-weight:600}
+.audit-action{color:var(--text-secondary)}
+.audit-detail{color:var(--text-muted);font-size:10px;margin-top:2px}
+
+/* === Backups === */
+.backup-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:8px;margin-bottom:6px;font-size:12px}
+.backup-name{color:var(--text-secondary);font-family:monospace;font-size:11px}
+.backup-size{color:var(--text-muted);font-size:10px}
+.backup-actions{display:flex;gap:6px}
 
 /* === Nav === */
 .nav{display:flex;gap:2px;padding:8px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -364,8 +383,12 @@ APP = r'''<!DOCTYPE html>
       <span class="logo-label">Tasks</span>
     </div>
     <div class="user-info">
+      <button id="notif-btn" class="notif-btn" title="Известия">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span id="notif-badge" class="notif-badge" style="display:none">0</span>
+      </button>
       <span class="user-name">{{ user.display_name }}</span>
-      <span class="user-badge">{{ "CEO" if is_ceo else "Служител" }}</span>
+      <span class="user-badge">{% if is_ceo %}CEO{% elif is_manager %}Мениджър{% else %}Служител{% endif %}</span>
       <a href="/logout" class="logout-btn" title="Изход">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </a>
@@ -373,19 +396,13 @@ APP = r'''<!DOCTYPE html>
   </header>
 
   <nav class="nav" id="main-nav">
-    {% if is_ceo %}
     <button class="nav-btn active" data-view="kanban">Kanban</button>
     <button class="nav-btn" data-view="list">Списък</button>
     <button class="nav-btn" data-view="calendar">Календар</button>
     <button class="nav-btn" data-view="projects">Проекти</button>
-    <button class="nav-btn" data-view="reports">Отчети</button>
-    <button class="nav-btn" data-view="dashboard">Dashboard</button>
-    <button class="nav-btn" data-view="admin">Админ</button>
-    {% else %}
-    <button class="nav-btn active" data-view="kanban">Задачи</button>
-    <button class="nav-btn" data-view="calendar">Календар</button>
-    <button class="nav-btn" data-view="reports">Дневен отчет</button>
-    {% endif %}
+    <button class="nav-btn" data-view="reports">{% if is_ceo or is_manager %}Отчети{% else %}Дневен отчет{% endif %}</button>
+    {% if is_ceo %}<button class="nav-btn" data-view="dashboard">Dashboard</button>{% endif %}
+    {% if is_ceo %}<button class="nav-btn" data-view="admin">Админ</button>{% endif %}
   </nav>
 
   <main>
@@ -413,8 +430,15 @@ APP = r'''<!DOCTYPE html>
   </div>
 </div>
 
+<div id="notif-popup" class="notif-popup">
+  <div class="notif-header">Известия</div>
+  <div id="notif-list" class="notif-list"></div>
+</div>
+
 <script>
 const IS_CEO = {{ "true" if is_ceo else "false" }};
+const IS_MANAGER = {{ "true" if is_manager else "false" }};
+const USER_ROLE = "{{ user_role }}";
 const USER_ID = {{ user.id }};
 const USERS = {{ users | tojson }};
 const PROJECTS = {{ projects | tojson }};
@@ -441,7 +465,77 @@ document.getElementById('modal-close').addEventListener('click', closeModal);
 document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
+document.getElementById('notif-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const popup = document.getElementById('notif-popup');
+  popup.classList.toggle('show');
+});
+document.addEventListener('click', e => {
+  const popup = document.getElementById('notif-popup');
+  const btn = document.getElementById('notif-btn');
+  if (popup && !popup.contains(e.target) && !btn.contains(e.target)) {
+    popup.classList.remove('show');
+  }
+});
 loadTasks();
+loadNotifications();
+setInterval(loadNotifications, 60000);
+
+async function loadNotifications() {
+  try {
+    const res = await fetch('/api/notifications');
+    const n = await res.json();
+    const total = (n.overdue||0) + (n.team_no_report||0) + (!n.has_report_today && USER_ROLE === 'employee' ? 1 : 0);
+    const badge = document.getElementById('notif-badge');
+    if (total > 0) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'flex'; }
+    else { badge.style.display = 'none'; }
+    
+    const list = document.getElementById('notif-list');
+    let html = '';
+    if (n.overdue > 0) {
+      html += `<div class="notif-item" onclick="document.getElementById('notif-popup').classList.remove('show');switchView('kanban')">
+        <div class="notif-icon" style="background:rgba(248,81,73,.15);color:#f85149">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="notif-content"><span>Просрочени задачи</span><span class="notif-count" style="color:#f85149">${n.overdue}</span></div>
+      </div>`;
+    }
+    if (n.today > 0) {
+      html += `<div class="notif-item" onclick="document.getElementById('notif-popup').classList.remove('show');switchView('calendar')">
+        <div class="notif-icon" style="background:rgba(210,153,34,.15);color:#d29922">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="notif-content"><span>Срок днес</span><span class="notif-count" style="color:#d29922">${n.today}</span></div>
+      </div>`;
+    }
+    if (n.active > 0) {
+      html += `<div class="notif-item" onclick="document.getElementById('notif-popup').classList.remove('show');switchView('list')">
+        <div class="notif-icon" style="background:rgba(88,166,255,.15);color:#58a6ff">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+        <div class="notif-content"><span>Активни задачи</span><span class="notif-count">${n.active}</span></div>
+      </div>`;
+    }
+    if (USER_ROLE === 'employee' && !n.has_report_today) {
+      html += `<div class="notif-item" onclick="document.getElementById('notif-popup').classList.remove('show');switchView('reports')">
+        <div class="notif-icon" style="background:rgba(198,163,80,.15);color:#c6a350">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <div class="notif-content"><span style="color:#c6a350">Не си попълнил отчет днес</span></div>
+      </div>`;
+    }
+    if ((USER_ROLE === 'ceo' || USER_ROLE === 'manager') && n.team_no_report > 0) {
+      html += `<div class="notif-item" onclick="document.getElementById('notif-popup').classList.remove('show');switchView('reports')">
+        <div class="notif-icon" style="background:rgba(198,163,80,.15);color:#c6a350">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <div class="notif-content"><span>Без отчет днес</span><span class="notif-count" style="color:#c6a350">${n.team_no_report}</span></div>
+      </div>`;
+    }
+    if (!html) html = '<div class="notif-empty">Всичко е под контрол</div>';
+    list.innerHTML = html;
+  } catch(e) { console.error(e); }
+}
 
 function switchView(v) {
   curView = v;
@@ -563,20 +657,56 @@ async function loadProjects(){
   let html='';
   projects.forEach(p=>{
     const pct=p.total_tasks?Math.round(p.done_tasks/p.total_tasks*100):0;
-    html+=`<div class="proj-card"><div class="proj-head"><div style="display:flex;align-items:center;gap:8px">
+    html+=`<div class="proj-card" onclick="showProjectTasks(${p.id},'${p.name.replace(/'/g,"\\'")}','${p.color}')" style="cursor:pointer"><div class="proj-head"><div style="display:flex;align-items:center;gap:8px">
       <span class="proj-dot" style="background:${p.color}"></span><span class="proj-name">${p.name}</span></div>
       <span class="proj-pct">${pct}%</span></div>
       <div class="proj-bar"><div class="proj-fill" style="width:${pct}%;background:${p.color}"></div></div>
       <div class="proj-stats"><span>${p.total_tasks} задачи</span><span style="color:#3fb950">${p.done_tasks} готови</span></div></div>`;
   });
-  if(IS_CEO) html+=`<button class="btn-outline" onclick="openProjectModal()" style="margin-top:8px">+ Нов проект</button>`;
+  html+=`<button class="btn-outline" onclick="openProjectModal()" style="margin-top:8px">+ Нов проект</button>`;
   document.getElementById('v-projects').innerHTML=html;
 }
+
+window.showProjectTasks=function(pid, pname, pcolor){
+  const projTasks = allTasks.filter(t => t.project_id === pid);
+  if(!projTasks.length){
+    openModal(pname, `<div style="color:#8b949e;font-size:13px;padding:10px 0">Няма задачи в този проект.</div>
+      <div class="modal-actions"><button class="btn-primary" onclick="closeModal();openTaskModal();setTimeout(()=>{const s=document.getElementById('nt-proj');if(s)s.value='${pid}';},50)">+ Добави задача</button></div>`);
+    return;
+  }
+  // Group by status
+  const groups = {todo:[],progress:[],review:[],done:[]};
+  projTasks.forEach(t => groups[t.status].push(t));
+  let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #30363d">
+    <span class="proj-dot" style="background:${pcolor}"></span>
+    <span style="font-size:12px;color:#8b949e">${projTasks.length} задачи общо</span></div>`;
+  ['todo','progress','review','done'].forEach(st => {
+    if(!groups[st].length) return;
+    html += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#8b949e;font-weight:600;margin:12px 0 6px;display:flex;align-items:center;gap:6px"><span class="sdot" style="background:${SC[st]}"></span>${SL[st]} (${groups[st].length})</div>`;
+    groups[st].forEach(t => {
+      const od = isOverdue(t);
+      html += `<div class="rpt-card" onclick="closeModal();openEditTask(${t.id})" style="cursor:pointer;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span class="badge ${badgeClass(t.priority)}">${PL[t.priority]}</span>
+          <span style="font-size:11px;color:${od?'#f85149':'#8b949e'}">${t.due_date||'—'}</span>
+        </div>
+        <div style="font-weight:500;font-size:14px;margin-bottom:4px;color:#e6edf3">${t.title}</div>
+        <div style="font-size:12px;color:#8b949e;display:flex;align-items:center;gap:6px">
+          <span class="avatar-sm" style="background:${t.assignee_color||'#8b949e'}">${t.assignee_initials||'?'}</span>
+          <span>${t.assignee_name||'—'}</span>
+        </div></div>`;
+    });
+  });
+  html += `<div class="modal-actions" style="margin-top:16px;border-top:1px solid #30363d;padding-top:12px">
+    <button class="btn-outline" onclick="closeModal()">Затвори</button>
+    <button class="btn-primary" onclick="closeModal();openTaskModal();setTimeout(()=>{const s=document.getElementById('nt-proj');if(s)s.value='${pid}';},50)">+ Нова задача</button></div>`;
+  openModal(pname, html);
+};
 
 async function loadReports(){
   const el=document.getElementById('v-reports'); let html='';
   if(!IS_CEO){
-    const myTasks=allTasks.filter(t=>t.status!=='done');
+    const myTasks=allTasks.filter(t=>t.assignee_id===USER_ID && t.status!=='done');
     html+=`<div class="rpt-form"><div class="rpt-form-title">Попълни дневен отчет</div>
       <div id="rpt-items"><div class="rpt-item-row"><div class="rpt-item-fields">
         <select class="rpt-task-sel"><option value="">— Избери задача —</option>${myTasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>
@@ -588,7 +718,7 @@ async function loadReports(){
       <input type="text" id="rpt-note" placeholder="Нещо важно..." class="rpt-input">
       <button class="btn-primary" onclick="submitReport()" style="margin-top:12px;width:100%">Изпрати отчет</button></div>`;
   }
-  if(IS_CEO){
+  if(IS_CEO || IS_MANAGER){
     html+=`<div class="filters" id="rpt-filters">
       <button class="fbtn active" onclick="filterReports(null,this)">Всички</button>
       ${USERS.map(u=>`<button class="fbtn" onclick="filterReports(${u.id},this)">${u.display_name}</button>`).join('')}</div>`;
@@ -624,7 +754,7 @@ window.filterReports=async function(uid,btn){
   renderReportList(await res.json());
 };
 window.addReportItem=function(){
-  const myTasks=allTasks.filter(t=>t.status!=='done');
+  const myTasks=allTasks.filter(t=>t.assignee_id===USER_ID && t.status!=='done');
   const row=document.createElement('div'); row.className='rpt-item-row';
   row.innerHTML=`<div class="rpt-item-fields"><select class="rpt-task-sel"><option value="">— Избери задача —</option>${myTasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>
     <div class="rpt-row-inner"><input type="text" class="rpt-desc" placeholder="Какво направи..."><input type="number" class="rpt-hrs" value="2" min="0" max="16" step="0.5" style="width:70px"><span style="font-size:12px;color:#8b949e">ч</span></div></div>`;
@@ -673,37 +803,69 @@ function openModal(title,bodyHtml){document.getElementById('modal-title').textCo
 function closeModal(){document.getElementById('modal-overlay').classList.remove('show');}
 
 function openTaskModal(){
+  const whoOptions = `<option value="${USER_ID}" selected>Себе си</option>` + USERS.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join('');
   openModal('Нова задача',`
     <label>Заглавие</label><input type="text" id="nt-title" placeholder="Опиши задачата..." class="modal-input">
     <label>Описание</label><textarea id="nt-desc" placeholder="Детайли..." class="modal-input" rows="2"></textarea>
     <label>Проект</label><select id="nt-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
     <label>Приоритет</label><select id="nt-pri" class="modal-input"><option value="critical">Критичен</option><option value="high">Висок</option><option value="medium" selected>Среден</option><option value="low">Нисък</option></select>
-    ${IS_CEO?`<label>Отговорник</label><select id="nt-who" class="modal-input">${USERS.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join('')}</select>`:''}
+    <label>Отговорник</label><select id="nt-who" class="modal-input">${whoOptions}</select>
     <label>Краен срок</label><input type="date" id="nt-due" class="modal-input" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}">
     <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveNewTask()">Добави</button></div>`);
 }
 window.saveNewTask=async function(){
   const title=document.getElementById('nt-title').value.trim(); if(!title) return;
-  const data={title,description:document.getElementById('nt-desc').value,project_id:parseInt(document.getElementById('nt-proj').value),priority:document.getElementById('nt-pri').value,due_date:document.getElementById('nt-due').value};
-  if(IS_CEO) data.assignee_id=parseInt(document.getElementById('nt-who').value);
+  const data={title,description:document.getElementById('nt-desc').value,project_id:parseInt(document.getElementById('nt-proj').value),priority:document.getElementById('nt-pri').value,due_date:document.getElementById('nt-due').value,assignee_id:parseInt(document.getElementById('nt-who').value)};
   await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   closeModal(); await loadTasks(); switchView(curView);
 };
 window.openEditTask=function(id){
   const t=allTasks.find(x=>x.id===id); if(!t) return;
+  const canDelete = IS_CEO || IS_MANAGER;
+  const whoOpts = USERS.map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${u.display_name}</option>`).join('');
+  const meOpt = `<option value="${USER_ID}" ${USER_ID===t.assignee_id?'selected':''}>${USER_ID===t.assignee_id?'Себе си':'— Себе си —'}</option>`;
   openModal('Редактиране',`
     <label>Заглавие</label><input type="text" id="et-title" value="${t.title}" class="modal-input">
     <label>Описание</label><textarea id="et-desc" class="modal-input" rows="2">${t.description||''}</textarea>
     <label>Проект</label><select id="et-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}" ${p.id===t.project_id?'selected':''}>${p.name}</option>`).join('')}</select>
     <label>Приоритет</label><select id="et-pri" class="modal-input">${Object.keys(PL).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PL[k]}</option>`).join('')}</select>
     <label>Статус</label><select id="et-st" class="modal-input">${Object.keys(SL).map(k=>`<option value="${k}" ${k===t.status?'selected':''}>${SL[k]}</option>`).join('')}</select>
-    ${IS_CEO?`<label>Отговорник</label><select id="et-who" class="modal-input">${USERS.map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${u.display_name}</option>`).join('')}</select>`:''}
+    <label>Отговорник</label><select id="et-who" class="modal-input">${meOpt}${whoOpts}</select>
     <label>Краен срок</label><input type="date" id="et-due" class="modal-input" value="${t.due_date||''}">
-    <div class="modal-actions">${IS_CEO?`<button class="btn-danger" onclick="deleteTask(${t.id})">Изтрий</button>`:''}<button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditTask(${t.id})">Запази</button></div>`);
+    <div style="margin-top:14px"><button class="btn-outline btn-sm" onclick="showTaskHistory(${t.id})">История на промените</button><div id="audit-container"></div></div>
+    <div class="modal-actions">${canDelete?`<button class="btn-danger" onclick="deleteTask(${t.id})">Изтрий</button>`:''}<button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditTask(${t.id})">Запази</button></div>`);
+};
+
+window.showTaskHistory = async function(tid) {
+  const container = document.getElementById('audit-container');
+  if (container.innerHTML) { container.innerHTML = ''; return; }
+  const res = await fetch(`/api/audit/task/${tid}`);
+  const log = await res.json();
+  if (!log.length) { container.innerHTML = '<div style="font-size:11px;color:#8b949e;padding:8px 0">Няма история</div>'; return; }
+  const actionLabels = {created:'Създадена', updated:'Промяна', deleted:'Изтрита', reset_password:'Парола сменена'};
+  const fieldLabels = {title:'заглавие', description:'описание', priority:'приоритет', status:'статус', assignee_id:'отговорник', project_id:'проект', due_date:'срок'};
+  let html = '<div class="audit-list">';
+  log.forEach(e => {
+    const dt = new Date(e.created_at);
+    const when = `${dt.toLocaleDateString('bg-BG')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    let detailStr = '';
+    if (e.details && e.action === 'updated') {
+      detailStr = Object.keys(e.details).map(k => `${fieldLabels[k]||k}`).join(', ');
+    }
+    html += `<div class="audit-item">
+      <span class="avatar-sm" style="background:${e.color||'#8b949e'};width:18px;height:18px;font-size:8px">${e.initials||'?'}</span>
+      <div style="flex:1">
+        <div><span class="audit-who">${e.display_name||'—'}</span> <span class="audit-action">${actionLabels[e.action]||e.action}</span></div>
+        ${detailStr?`<div class="audit-detail">${detailStr}</div>`:''}
+      </div>
+      <span class="audit-when">${when}</span>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
 };
 window.saveEditTask=async function(id){
-  const data={title:document.getElementById('et-title').value.trim(),description:document.getElementById('et-desc').value,project_id:parseInt(document.getElementById('et-proj').value),priority:document.getElementById('et-pri').value,status:document.getElementById('et-st').value,due_date:document.getElementById('et-due').value};
-  if(IS_CEO&&document.getElementById('et-who')) data.assignee_id=parseInt(document.getElementById('et-who').value);
+  const data={title:document.getElementById('et-title').value.trim(),description:document.getElementById('et-desc').value,project_id:parseInt(document.getElementById('et-proj').value),priority:document.getElementById('et-pri').value,status:document.getElementById('et-st').value,due_date:document.getElementById('et-due').value,assignee_id:parseInt(document.getElementById('et-who').value)};
   await fetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   closeModal(); await loadTasks(); switchView(curView);
 };
@@ -713,28 +875,81 @@ window.saveProject=async function(){const name=document.getElementById('np-name'
 
 // === ADMIN ===
 async function loadAdmin(){
-  const[uRes,pRes]=await Promise.all([fetch('/api/users'),fetch('/api/projects/list')]);
-  const users=await uRes.json(),projs=await pRes.json();
+  const[uRes,pRes,bRes]=await Promise.all([fetch('/api/users'),fetch('/api/projects/list'),fetch('/api/backups')]);
+  const users=await uRes.json(),projs=await pRes.json(),backups=await bRes.json();
   let html=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center"><span>Служители</span><button class="btn-outline btn-sm" onclick="openAddUser()">+ Нов служител</button></div>`;
   users.forEach(u=>{
-    html+=`<div class="admin-card"><div class="admin-card-left"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><div><div class="admin-name">${u.display_name}</div><div class="admin-sub">@${u.username}</div></div></div>
-      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
+    const roleBadge = u.role==='manager' ? `<span style="font-size:10px;color:#c6a350;background:rgba(198,163,80,.15);padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px">Мениджър</span>` : '';
+    const visBtn = u.role==='manager' ? `<button class="btn-outline btn-sm" onclick="openVisibility(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">Видимост</button>` : '';
+    html+=`<div class="admin-card"><div class="admin-card-left"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><div><div class="admin-name">${u.display_name}${roleBadge}</div><div class="admin-sub">@${u.username}</div></div></div>
+      <div class="admin-card-actions">${visBtn}<button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}','${u.role}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
   });
   html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>Проекти</span><button class="btn-outline btn-sm" onclick="openProjectModal()">+ Нов проект</button></div>`;
   projs.forEach(p=>{
     html+=`<div class="admin-card"><div class="admin-card-left"><span class="proj-dot" style="background:${p.color}"></span><div><div class="admin-name">${p.name}</div><div class="admin-sub">${p.total_tasks} задачи / ${p.done_tasks} готови</div></div></div>
       <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditProject(${p.id},'${p.name.replace(/'/g,"\\'")}','${p.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteProject(${p.id},'${p.name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
   });
+  html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>Бекъпи на базата</span><button class="btn-outline btn-sm" onclick="createBackup()">Създай бекъп сега</button></div>`;
+  if(!backups.length){
+    html+=`<div style="font-size:12px;color:#8b949e;padding:12px">Все още няма бекъпи. Системата автоматично прави дневни бекъпи.</div>`;
+  } else {
+    backups.slice(0,10).forEach(b=>{
+      const dt = new Date(b.created*1000);
+      const when = `${dt.toLocaleDateString('bg-BG')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      const sizeKB = (b.size/1024).toFixed(1);
+      html+=`<div class="backup-row"><div><div class="backup-name">${b.name}</div><div class="backup-size">${when} · ${sizeKB} KB</div></div>
+        <div class="backup-actions"><a href="/api/backups/download/${b.name}" class="btn-outline btn-sm" download>Свали</a></div></div>`;
+    });
+    if(backups.length>10) html+=`<div style="font-size:11px;color:#8b949e;padding:6px;text-align:center">Показани 10 от ${backups.length} бекъпа</div>`;
+  }
   document.getElementById('v-admin').innerHTML=html;
 }
-window.openAddUser=function(){openModal('Нов служител',`<label>Име (кирилица)</label><input type="text" id="nu-name" class="modal-input" placeholder="Иван Петров"><label>Потребителско име (латиница)</label><input type="text" id="nu-user" class="modal-input" placeholder="ivan.petrov"><label>Парола</label><input type="text" id="nu-pass" class="modal-input" value="1234"><label>Цвят</label><input type="color" id="nu-color" class="modal-input" value="#58a6ff"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveNewUser()">Добави</button></div>`);};
-window.saveNewUser=async function(){const name=document.getElementById('nu-name').value.trim(),username=document.getElementById('nu-user').value.trim();if(!name||!username){alert('Попълни име и потребителско име');return;}const res=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,username,password:document.getElementById('nu-pass').value||'1234',color:document.getElementById('nu-color').value})});const data=await res.json();if(data.error==='username_taken'){alert('Потребителското име вече съществува!');return;}closeModal();location.reload();};
-window.openEditUser=function(id,name,username,color){openModal('Редактиране',`<label>Име</label><input type="text" id="eu-name" class="modal-input" value="${name}"><label>Потребителско име</label><input type="text" id="eu-user" class="modal-input" value="${username}"><label>Нова парола (празно = без промяна)</label><input type="text" id="eu-pass" class="modal-input" placeholder="Нова парола..."><label>Цвят</label><input type="color" id="eu-color" class="modal-input" value="${color}"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditUser(${id})">Запази</button></div>`);};
-window.saveEditUser=async function(id){const data={display_name:document.getElementById('eu-name').value.trim(),username:document.getElementById('eu-user').value.trim(),color:document.getElementById('eu-color').value};const pass=document.getElementById('eu-pass').value.trim();if(pass)data.password=pass;await fetch(`/api/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});closeModal();location.reload();};
+window.createBackup = async function() {
+  const r = await fetch('/api/backups/create', {method:'POST'});
+  const d = await r.json();
+  if (d.ok) loadAdmin();
+};
+window.openAddUser=function(){openModal('Нов служител',`<label>Име (кирилица)</label><input type="text" id="nu-name" class="modal-input" placeholder="Иван Петров"><label>Потребителско име (латиница)</label><input type="text" id="nu-user" class="modal-input" placeholder="ivan.petrov"><label>Парола</label><input type="text" id="nu-pass" class="modal-input" value="1234"><label>Роля</label><select id="nu-role" class="modal-input"><option value="employee">Служител</option><option value="manager">Мениджър</option></select><label>Цвят</label><input type="color" id="nu-color" class="modal-input" value="#58a6ff"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveNewUser()">Добави</button></div>`);};
+window.saveNewUser=async function(){const name=document.getElementById('nu-name').value.trim(),username=document.getElementById('nu-user').value.trim();if(!name||!username){alert('Попълни име и потребителско име');return;}const res=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,username,password:document.getElementById('nu-pass').value||'1234',role:document.getElementById('nu-role').value,color:document.getElementById('nu-color').value})});const data=await res.json();if(data.error==='username_taken'){alert('Потребителското име вече съществува!');return;}closeModal();location.reload();};
+window.openEditUser=function(id,name,username,color,role){openModal('Редактиране',`<label>Име</label><input type="text" id="eu-name" class="modal-input" value="${name}"><label>Потребителско име</label><input type="text" id="eu-user" class="modal-input" value="${username}"><label>Нова парола (празно = без промяна)</label><input type="text" id="eu-pass" class="modal-input" placeholder="Нова парола..."><label>Роля</label><select id="eu-role" class="modal-input"><option value="employee" ${role==='employee'?'selected':''}>Служител</option><option value="manager" ${role==='manager'?'selected':''}>Мениджър</option></select><label>Цвят</label><input type="color" id="eu-color" class="modal-input" value="${color}"><div style="margin-top:14px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px"><div style="font-size:11px;color:#8b949e;margin-bottom:6px">Забравена парола?</div><button class="btn-outline btn-sm" onclick="resetUserPassword(${id},'${name.replace(/'/g,"\\'")}')">Генерирай нова парола</button></div><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditUser(${id})">Запази</button></div>`);};
+window.resetUserPassword = async function(id, name) {
+  if (!confirm(`Сигурен ли си, че искаш да генерираш нова парола за "${name}"? Старата парола вече няма да работи.`)) return;
+  const r = await fetch(`/api/users/${id}/reset-password`, {method:'POST'});
+  const d = await r.json();
+  if (d.new_password) {
+    openModal('Нова парола генерирана', `
+      <div style="text-align:center;padding:10px 0">
+        <div style="font-size:13px;color:#8b949e;margin-bottom:14px">Дай тази парола на ${name}. Тя няма да бъде показана отново.</div>
+        <div style="font-size:24px;font-weight:600;color:#c6a350;background:#161b22;padding:16px;border-radius:10px;border:1px solid rgba(198,163,80,.3);font-family:monospace;letter-spacing:2px">${d.new_password}</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:12px">Препоръка: помоли служителя да я смени при първи вход.</div>
+      </div>
+      <div class="modal-actions"><button class="btn-primary" onclick="closeModal()">Затвори</button></div>
+    `);
+  }
+};
+window.saveEditUser=async function(id){const data={display_name:document.getElementById('eu-name').value.trim(),username:document.getElementById('eu-user').value.trim(),color:document.getElementById('eu-color').value,role:document.getElementById('eu-role').value};const pass=document.getElementById('eu-pass').value.trim();if(pass)data.password=pass;await fetch(`/api/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});closeModal();location.reload();};
 window.deleteUser=async function(id,name){if(!confirm(`Изтриване на "${name}"? Задачите му ще останат без отговорник.`))return;await fetch(`/api/users/${id}`,{method:'DELETE'});location.reload();};
 window.openEditProject=function(id,name,color){openModal('Редактиране',`<label>Име</label><input type="text" id="ep-name" class="modal-input" value="${name}"><label>Цвят</label><input type="color" id="ep-color" class="modal-input" value="${color}"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditProject(${id})">Запази</button></div>`);};
 window.saveEditProject=async function(id){await fetch(`/api/projects/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('ep-name').value.trim(),color:document.getElementById('ep-color').value})});closeModal();location.reload();};
 window.deleteProject=async function(id,name){if(!confirm(`Изтриване на проект "${name}"?`))return;await fetch(`/api/projects/${id}`,{method:'DELETE'});location.reload();};
+
+window.openVisibility=async function(managerId, managerName){
+  const [usersRes, visRes] = await Promise.all([fetch('/api/users'), fetch(`/api/visibility/${managerId}`)]);
+  const users = await usersRes.json();
+  const visible = await visRes.json();
+  const employees = users.filter(u => u.role === 'employee');
+  const checks = employees.map(u => `<label style="display:flex;align-items:center;gap:10px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="vis-cb" data-id="${u.id}" ${visible.includes(u.id)?'checked':''} style="width:18px;height:18px;cursor:pointer"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><span style="color:#e6edf3;font-size:13px">${u.display_name}</span></label>`).join('');
+  openModal(`Видимост на отчети — ${managerName}`, `
+    <div style="font-size:12px;color:#8b949e;margin-bottom:12px">Избери чии отчети може да вижда този мениджър:</div>
+    ${checks || '<div style="color:#8b949e;font-size:13px">Няма служители</div>'}
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveVisibility(${managerId})">Запази</button></div>
+  `);
+};
+window.saveVisibility=async function(managerId){
+  const checked = Array.from(document.querySelectorAll('.vis-cb:checked')).map(cb => parseInt(cb.dataset.id));
+  await fetch(`/api/visibility/${managerId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employee_ids: checked})});
+  closeModal();
+};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </body>

@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-import sqlite3, os
+import sqlite3, os, hashlib, secrets, shutil, threading, time, json
 from datetime import datetime, date, timedelta
 from contextlib import contextmanager
 from typing import Optional
@@ -16,6 +16,66 @@ app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "h
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 DB_PATH = os.environ.get("DB_PATH", "helios_tasks.db")
+BACKUP_DIR = os.environ.get("BACKUP_DIR", "backups")
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+# === Password hashing ===
+def hash_password(password: str) -> str:
+    """PBKDF2-SHA256 with random salt. Format: pbkdf2$iterations$salt_hex$hash_hex"""
+    salt = secrets.token_bytes(16)
+    iterations = 100000
+    h = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations)
+    return f"pbkdf2${iterations}${salt.hex()}${h.hex()}"
+
+def verify_password(password: str, stored: str) -> bool:
+    """Verify password against stored hash. Supports both hashed and legacy plain text."""
+    if not stored:
+        return False
+    if stored.startswith("pbkdf2$"):
+        try:
+            _, iters, salt_hex, hash_hex = stored.split("$")
+            h = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(salt_hex), int(iters))
+            return secrets.compare_digest(h.hex(), hash_hex)
+        except Exception:
+            return False
+    # Legacy plain text comparison (will be migrated on next login)
+    return stored == password
+
+def is_hashed(stored: str) -> bool:
+    return bool(stored) and stored.startswith("pbkdf2$")
+
+# === Backup system ===
+def backup_db():
+    """Create a timestamped backup of the database. Keeps last 30 daily backups."""
+    if not os.path.exists(DB_PATH):
+        return None
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(BACKUP_DIR, f"helios_tasks_{ts}.db")
+        # Use SQLite backup API for safe online backup
+        src = sqlite3.connect(DB_PATH)
+        dst = sqlite3.connect(backup_path)
+        src.backup(dst)
+        src.close()
+        dst.close()
+        # Cleanup old backups - keep only last 30
+        backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.startswith("helios_tasks_") and f.endswith(".db")])
+        if len(backups) > 30:
+            for old in backups[:-30]:
+                try:
+                    os.remove(os.path.join(BACKUP_DIR, old))
+                except Exception:
+                    pass
+        return backup_path
+    except Exception as e:
+        print(f"Backup error: {e}")
+        return None
+
+def backup_loop():
+    """Run backup once a day in background."""
+    while True:
+        time.sleep(24 * 60 * 60)
+        backup_db()
 
 @contextmanager
 def get_db():
@@ -28,6 +88,15 @@ def get_db():
         conn.commit()
     finally:
         conn.close()
+
+def log_action(user_id, entity_type, entity_id, action, details=None):
+    """Record an action in the audit log."""
+    try:
+        with get_db() as db:
+            db.execute("INSERT INTO audit_log (user_id, entity_type, entity_id, action, details) VALUES (?,?,?,?,?)",
+                       (user_id, entity_type, entity_id, action, json.dumps(details) if details else None))
+    except Exception as e:
+        print(f"Audit log error: {e}")
 
 def init_db():
     with get_db() as db:
@@ -78,6 +147,25 @@ def init_db():
             report_id INTEGER NOT NULL, note TEXT NOT NULL,
             FOREIGN KEY (report_id) REFERENCES daily_reports(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS report_visibility (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manager_id INTEGER NOT NULL,
+            employee_id INTEGER NOT NULL,
+            UNIQUE(manager_id, employee_id),
+            FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            action TEXT NOT NULL,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
         """)
         if not db.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
             users_data = [
@@ -89,7 +177,9 @@ def init_db():
                 ('elena','1234','Елена','employee','#534AB7','ЕЛ'),
             ]
             for u in users_data:
-                db.execute("INSERT INTO users (username,password,display_name,role,color,initials) VALUES (?,?,?,?,?,?)", u)
+                username, password, name, role, color, initials = u
+                db.execute("INSERT INTO users (username,password,display_name,role,color,initials) VALUES (?,?,?,?,?,?)",
+                           (username, hash_password(password), name, role, color, initials))
             projs = [('Omega #3','#0B3D6B',''),('Omega #4','#1D9E75',''),('Omega #2','#D4A843',''),('Склад','#D85A30',''),('Общо','#534AB7','')]
             for p in projs:
                 db.execute("INSERT INTO projects (name,color,description) VALUES (?,?,?)", p)
@@ -129,6 +219,10 @@ def init_db():
 
 init_db()
 
+# Initial backup on startup, then daily in background
+backup_db()
+threading.Thread(target=backup_loop, daemon=True).start()
+
 def current_user(request: Request):
     uid = request.session.get("user_id")
     if not uid: return None
@@ -148,8 +242,11 @@ async def login_page(request: Request):
 @app.post("/login")
 async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
     with get_db() as db:
-        user = db.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password)).fetchone()
-        if user:
+        user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        if user and verify_password(password, user["password"]):
+            # Auto-migrate plain text passwords to hashed format on successful login
+            if not is_hashed(user["password"]):
+                db.execute("UPDATE users SET password=? WHERE id=?", (hash_password(password), user["id"]))
             request.session["user_id"] = user["id"]
             return RedirectResponse("/app", 302)
     return templates.TemplateResponse("login.html", {"request": request, "error": "Грешно потребителско име или парола"})
@@ -164,19 +261,19 @@ async def main_app(request: Request):
     user = current_user(request)
     if not user: return RedirectResponse("/login", 302)
     with get_db() as db:
-        users = [dict(r) for r in db.execute("SELECT * FROM users WHERE role='employee' ORDER BY display_name").fetchall()]
+        users = [dict(r) for r in db.execute("SELECT * FROM users WHERE role!='ceo' ORDER BY role DESC, display_name").fetchall()]
         projects = [dict(r) for r in db.execute("SELECT * FROM projects ORDER BY name").fetchall()]
-    return templates.TemplateResponse("app.html", {"request": request, "user": dict(user), "users": users, "projects": projects, "is_ceo": is_ceo(user)})
+    user_dict = dict(user)
+    return templates.TemplateResponse("app.html", {"request": request, "user": user_dict, "users": users, "projects": projects, "is_ceo": is_ceo(user), "is_manager": user["role"] == "manager", "user_role": user["role"]})
 
 @app.get("/api/tasks")
 async def api_tasks(request: Request):
     user = current_user(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     with get_db() as db:
-        w = "" if is_ceo(user) else f"WHERE t.assignee_id={user['id']}"
-        rows = db.execute(f"""SELECT t.*, u.display_name as assignee_name, u.color as assignee_color,
+        rows = db.execute("""SELECT t.*, u.display_name as assignee_name, u.color as assignee_color,
             u.initials as assignee_initials, p.name as project_name, p.color as project_color
-            FROM tasks t LEFT JOIN users u ON t.assignee_id=u.id LEFT JOIN projects p ON t.project_id=p.id {w}
+            FROM tasks t LEFT JOIN users u ON t.assignee_id=u.id LEFT JOIN projects p ON t.project_id=p.id
             ORDER BY t.created_at DESC""").fetchall()
     return JSONResponse([dict(r) for r in rows])
 
@@ -185,11 +282,13 @@ async def create_task(request: Request):
     user = current_user(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     data = await request.json()
-    aid = data.get("assignee_id", user["id"]) if is_ceo(user) else user["id"]
+    aid = data.get("assignee_id", user["id"])
     with get_db() as db:
         r = db.execute("INSERT INTO tasks (title,description,priority,status,assignee_id,project_id,due_date,created_by) VALUES (?,?,?,?,?,?,?,?)",
             (data["title"], data.get("description",""), data.get("priority","medium"), "todo", aid, data.get("project_id"), data.get("due_date"), user["id"]))
-    return JSONResponse({"id": r.lastrowid, "ok": True})
+        tid = r.lastrowid
+    log_action(user["id"], "task", tid, "created", {"title": data["title"], "assignee_id": aid})
+    return JSONResponse({"id": tid, "ok": True})
 
 @app.put("/api/tasks/{tid}")
 async def update_task(request: Request, tid: int):
@@ -199,23 +298,29 @@ async def update_task(request: Request, tid: int):
     with get_db() as db:
         task = db.execute("SELECT * FROM tasks WHERE id=?", (tid,)).fetchone()
         if not task: return JSONResponse({"error": "not found"}, 404)
-        if not is_ceo(user) and task["assignee_id"] != user["id"]:
-            return JSONResponse({"error": "forbidden"}, 403)
         sets, vals = [], []
+        changes = {}
         for k in ["title","description","priority","status","assignee_id","project_id","due_date"]:
-            if k in data: sets.append(f"{k}=?"); vals.append(data[k])
+            if k in data:
+                sets.append(f"{k}=?"); vals.append(data[k])
+                if str(task[k]) != str(data[k]):
+                    changes[k] = {"from": task[k], "to": data[k]}
         if sets:
             sets.append("updated_at=?"); vals.append(datetime.now().isoformat()); vals.append(tid)
             db.execute(f"UPDATE tasks SET {','.join(sets)} WHERE id=?", vals)
+    if changes:
+        log_action(user["id"], "task", tid, "updated", changes)
     return JSONResponse({"ok": True})
 
 @app.delete("/api/tasks/{tid}")
 async def delete_task(request: Request, tid: int):
     user = current_user(request)
-    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    if not user or user["role"] not in ("ceo","manager"): return JSONResponse({"error": "forbidden"}, 403)
     with get_db() as db:
+        task = db.execute("SELECT title FROM tasks WHERE id=?", (tid,)).fetchone()
         db.execute("UPDATE report_items SET task_id=NULL WHERE task_id=?", (tid,))
         db.execute("DELETE FROM tasks WHERE id=?", (tid,))
+    log_action(user["id"], "task", tid, "deleted", {"title": task["title"] if task else None})
     return JSONResponse({"ok": True})
 
 @app.get("/api/reports")
@@ -224,8 +329,20 @@ async def api_reports(request: Request, user_id: Optional[int]=None):
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     with get_db() as db:
         w, p = [], []
-        if not is_ceo(user): w.append("dr.user_id=?"); p.append(user["id"])
-        elif user_id: w.append("dr.user_id=?"); p.append(user_id)
+        if user["role"] == "ceo":
+            if user_id: w.append("dr.user_id=?"); p.append(user_id)
+        elif user["role"] == "manager":
+            visible = db.execute("SELECT employee_id FROM report_visibility WHERE manager_id=?", (user["id"],)).fetchall()
+            visible_ids = [v["employee_id"] for v in visible] + [user["id"]]
+            if user_id:
+                if user_id not in visible_ids:
+                    return JSONResponse([])
+                w.append("dr.user_id=?"); p.append(user_id)
+            else:
+                placeholders = ",".join(["?"]*len(visible_ids))
+                w.append(f"dr.user_id IN ({placeholders})"); p.extend(visible_ids)
+        else:
+            w.append("dr.user_id=?"); p.append(user["id"])
         wc = ("WHERE "+" AND ".join(w)) if w else ""
         rows = db.execute(f"SELECT dr.*, u.display_name, u.color, u.initials FROM daily_reports dr JOIN users u ON dr.user_id=u.id {wc} ORDER BY dr.report_date DESC, u.display_name", p).fetchall()
         result = []
@@ -266,11 +383,10 @@ async def api_calendar(request: Request, month: Optional[int]=None, year: Option
     start = date(y, m, 1)
     end = date(y+(m//12), (m%12)+1, 1) - timedelta(days=1)
     with get_db() as db:
-        w = "" if is_ceo(user) else f"AND t.assignee_id={user['id']}"
-        rows = db.execute(f"""SELECT t.*, u.display_name as assignee_name, u.color as assignee_color,
+        rows = db.execute("""SELECT t.*, u.display_name as assignee_name, u.color as assignee_color,
             u.initials as assignee_initials, p.name as project_name, p.color as project_color
             FROM tasks t LEFT JOIN users u ON t.assignee_id=u.id LEFT JOIN projects p ON t.project_id=p.id
-            WHERE t.due_date BETWEEN ? AND ? {w} ORDER BY t.due_date""", (start.isoformat(), end.isoformat())).fetchall()
+            WHERE t.due_date BETWEEN ? AND ? ORDER BY t.due_date""", (start.isoformat(), end.isoformat())).fetchall()
     return JSONResponse({"month":m,"year":y,"tasks":[dict(r) for r in rows]})
 
 @app.get("/api/dashboard")
@@ -298,7 +414,7 @@ async def api_dashboard(request: Request):
 @app.post("/api/projects")
 async def create_project(request: Request):
     user = current_user(request)
-    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    if not user or user["role"] not in ("ceo","manager","employee"): return JSONResponse({"error": "forbidden"}, 403)
     data = await request.json()
     with get_db() as db:
         r = db.execute("INSERT INTO projects (name,color,description) VALUES (?,?,?)", (data["name"], data.get("color","#0B3D6B"), data.get("description","")))
@@ -309,7 +425,7 @@ async def api_users(request: Request):
     user = current_user(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     with get_db() as db:
-        users = db.execute("SELECT id,username,display_name,role,color,initials FROM users WHERE role='employee' ORDER BY display_name").fetchall()
+        users = db.execute("SELECT id,username,display_name,role,color,initials FROM users WHERE role!='ceo' ORDER BY role DESC, display_name").fetchall()
     return JSONResponse([dict(u) for u in users])
 
 @app.get("/api/projects/list")
@@ -320,9 +436,8 @@ async def api_projects_list(request: Request):
         projects = db.execute("SELECT * FROM projects ORDER BY name").fetchall()
         result = []
         for p in projects:
-            w = "" if is_ceo(user) else f"AND assignee_id={user['id']}"
-            tc = db.execute(f"SELECT COUNT(*) as c FROM tasks WHERE project_id=? {w}", (p["id"],)).fetchone()["c"]
-            dc = db.execute(f"SELECT COUNT(*) as c FROM tasks WHERE project_id=? AND status='done' {w}", (p["id"],)).fetchone()["c"]
+            tc = db.execute("SELECT COUNT(*) as c FROM tasks WHERE project_id=?", (p["id"],)).fetchone()["c"]
+            dc = db.execute("SELECT COUNT(*) as c FROM tasks WHERE project_id=? AND status='done'", (p["id"],)).fetchone()["c"]
             result.append({**dict(p), "total_tasks":tc, "done_tasks":dc})
     return JSONResponse(result)
 
@@ -335,13 +450,15 @@ async def create_user(request: Request):
     data = await request.json()
     name = data.get("display_name","").strip()
     username = data.get("username","").strip().lower()
+    role = data.get("role","employee")
+    if role not in ("employee","manager"): role = "employee"
     if not name or not username: return JSONResponse({"error": "missing fields"}, 400)
     initials = "".join([w[0] for w in name.split()[:2]]).upper() or username[:2].upper()
     with get_db() as db:
         exists = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
         if exists: return JSONResponse({"error": "username_taken"}, 409)
         r = db.execute("INSERT INTO users (username,password,display_name,role,color,initials) VALUES (?,?,?,?,?,?)",
-            (username, data.get("password","1234"), name, "employee", data.get("color","#185FA5"), initials))
+            (username, hash_password(data.get("password","1234")), name, role, data.get("color","#185FA5"), initials))
     return JSONResponse({"ok": True, "id": r.lastrowid})
 
 @app.put("/api/users/{uid}")
@@ -360,10 +477,47 @@ async def update_user(request: Request, uid: int):
             initials = "".join([w[0] for w in name.split()[:2]]).upper()
             sets.append("initials=?"); vals.append(initials)
         if "password" in data and data["password"]:
-            sets.append("password=?"); vals.append(data["password"])
+            sets.append("password=?"); vals.append(hash_password(data["password"]))
+        if "role" in data and data["role"] in ("employee","manager") and u["role"] != "ceo":
+            sets.append("role=?"); vals.append(data["role"])
+            if data["role"] != "manager":
+                db.execute("DELETE FROM report_visibility WHERE manager_id=?", (uid,))
         if sets:
             vals.append(uid)
             db.execute(f"UPDATE users SET {','.join(sets)} WHERE id=?", vals)
+    return JSONResponse({"ok": True})
+
+@app.post("/api/users/{uid}/reset-password")
+async def reset_password(request: Request, uid: int):
+    """Generate and set a new random temporary password. Returns it once for CEO to share."""
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    with get_db() as db:
+        u = db.execute("SELECT id FROM users WHERE id=?", (uid,)).fetchone()
+        if not u: return JSONResponse({"error": "not found"}, 404)
+        new_pass = secrets.token_urlsafe(8)[:10]
+        db.execute("UPDATE users SET password=? WHERE id=?", (hash_password(new_pass), uid))
+    log_action(user["id"], "user", uid, "reset_password")
+    return JSONResponse({"ok": True, "new_password": new_pass})
+
+@app.get("/api/visibility/{manager_id}")
+async def get_visibility(request: Request, manager_id: int):
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    with get_db() as db:
+        rows = db.execute("SELECT employee_id FROM report_visibility WHERE manager_id=?", (manager_id,)).fetchall()
+    return JSONResponse([r["employee_id"] for r in rows])
+
+@app.put("/api/visibility/{manager_id}")
+async def set_visibility(request: Request, manager_id: int):
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    data = await request.json()
+    employee_ids = data.get("employee_ids", [])
+    with get_db() as db:
+        db.execute("DELETE FROM report_visibility WHERE manager_id=?", (manager_id,))
+        for eid in employee_ids:
+            db.execute("INSERT OR IGNORE INTO report_visibility (manager_id, employee_id) VALUES (?,?)", (manager_id, eid))
     return JSONResponse({"ok": True})
 
 @app.delete("/api/users/{uid}")
@@ -399,6 +553,80 @@ async def delete_project(request: Request, pid: int):
         db.execute("UPDATE tasks SET project_id=NULL WHERE project_id=?", (pid,))
         db.execute("DELETE FROM projects WHERE id=?", (pid,))
     return JSONResponse({"ok": True})
+
+# === Audit log ===
+@app.get("/api/audit/{entity_type}/{entity_id}")
+async def get_audit(request: Request, entity_type: str, entity_id: int):
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    with get_db() as db:
+        rows = db.execute("""SELECT al.*, u.display_name, u.color, u.initials
+            FROM audit_log al LEFT JOIN users u ON al.user_id=u.id
+            WHERE al.entity_type=? AND al.entity_id=? ORDER BY al.created_at DESC LIMIT 50""",
+            (entity_type, entity_id)).fetchall()
+    return JSONResponse([{**dict(r), "details": json.loads(r["details"]) if r["details"] else None} for r in rows])
+
+# === Notifications (badge counts) ===
+@app.get("/api/notifications")
+async def api_notifications(request: Request):
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    today = date.today().isoformat()
+    with get_db() as db:
+        my_overdue = db.execute("SELECT COUNT(*) as c FROM tasks WHERE assignee_id=? AND status!='done' AND due_date<?",
+                                (user["id"], today)).fetchone()["c"]
+        my_today = db.execute("SELECT COUNT(*) as c FROM tasks WHERE assignee_id=? AND status!='done' AND due_date=?",
+                              (user["id"], today)).fetchone()["c"]
+        my_active = db.execute("SELECT COUNT(*) as c FROM tasks WHERE assignee_id=? AND status NOT IN ('done')",
+                               (user["id"],)).fetchone()["c"]
+        has_report_today = db.execute("SELECT id FROM daily_reports WHERE user_id=? AND report_date=?",
+                                      (user["id"], today)).fetchone() is not None
+        team_no_report = 0
+        if user["role"] in ("ceo","manager"):
+            visible_ids = []
+            if user["role"] == "ceo":
+                visible_ids = [u["id"] for u in db.execute("SELECT id FROM users WHERE role='employee'").fetchall()]
+            else:
+                visible_ids = [v["employee_id"] for v in db.execute("SELECT employee_id FROM report_visibility WHERE manager_id=?", (user["id"],)).fetchall()]
+            for eid in visible_ids:
+                r = db.execute("SELECT id FROM daily_reports WHERE user_id=? AND report_date=?", (eid, today)).fetchone()
+                if not r: team_no_report += 1
+    return JSONResponse({
+        "overdue": my_overdue, "today": my_today, "active": my_active,
+        "has_report_today": has_report_today, "team_no_report": team_no_report
+    })
+
+# === Backups (CEO only) ===
+@app.get("/api/backups")
+async def list_backups(request: Request):
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    files = []
+    if os.path.exists(BACKUP_DIR):
+        for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            if f.startswith("helios_tasks_") and f.endswith(".db"):
+                fp = os.path.join(BACKUP_DIR, f)
+                files.append({"name": f, "size": os.path.getsize(fp), "created": os.path.getmtime(fp)})
+    return JSONResponse(files)
+
+@app.post("/api/backups/create")
+async def create_backup(request: Request):
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    path = backup_db()
+    if not path: return JSONResponse({"error": "backup_failed"}, 500)
+    return JSONResponse({"ok": True, "name": os.path.basename(path)})
+
+@app.get("/api/backups/download/{name}")
+async def download_backup(request: Request, name: str):
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    # Sanitize: only allow our backup naming pattern
+    if not (name.startswith("helios_tasks_") and name.endswith(".db") and "/" not in name and "\\" not in name):
+        return JSONResponse({"error": "invalid"}, 400)
+    fp = os.path.join(BACKUP_DIR, name)
+    if not os.path.exists(fp): return JSONResponse({"error": "not_found"}, 404)
+    return FileResponse(fp, filename=name, media_type="application/octet-stream")
 
 if __name__ == "__main__":
     import uvicorn
