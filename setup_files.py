@@ -148,6 +148,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg-de
 .cal-cell:hover{background:var(--bg-surface)}
 .cal-cell.empty{background:rgba(0,0,0,.15);cursor:default}
 .cal-cell.today{background:rgba(198,163,80,.04)}
+.cal-cell.cal-weekend{background:rgba(139,148,158,.04)}
+.cal-cell.cal-holiday{background:rgba(248,81,73,.06)}
+.cal-cell.cal-holiday.cal-weekend{background:rgba(248,81,73,.08)}
+.cal-day-name.cal-weekend-name{color:rgba(139,148,158,.6)}
+.cal-holiday-label{font-size:9px;color:#f85149;font-weight:600;line-height:1.2;padding:1px 3px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
 .cal-date{font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:3px;padding:2px 4px}
 .today-num{background:var(--gold);color:var(--bg-deep);border-radius:6px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-weight:600}
 .cal-tasks{display:flex;flex-direction:column;gap:2px}
@@ -265,29 +270,42 @@ textarea.modal-input{resize:vertical}
    ================== */
 @media(max-width:768px){
   .app{padding:0 12px 100px}
-  .topbar{padding:10px 0}
+  .topbar{padding:10px 0;gap:6px}
   .logo img{height:20px}
   .logo-divider{height:16px}
   .logo-label{font-size:10px;letter-spacing:1px}
   .user-name{display:none}
-  .nav-btn{padding:7px 12px;font-size:11px}
+  .user-info{gap:4px}
+  .nav-btn{padding:8px 12px;font-size:12px;min-height:36px}
   .kanban{grid-template-columns:1fr!important;gap:8px}
   .kcol{min-height:auto}
   .stats-grid{grid-template-columns:repeat(2,1fr)}
   .team-grid{grid-template-columns:repeat(2,1fr)}
-  .cal-cell{min-height:56px;padding:3px}
+  .cal-cell{min-height:62px;padding:3px}
   .cal-date{font-size:11px}
   .cal-task{font-size:9px;padding:1px 3px}
-  .today-num{width:20px;height:20px;font-size:10px;border-radius:5px}
+  .cal-task-text{font-size:9px}
+  .cal-holiday-label{display:none}
+  .cal-cell.cal-holiday::after{content:'•';position:absolute;top:2px;right:4px;color:#f85149;font-size:14px;line-height:1;font-weight:bold}
+  .cal-cell{position:relative}
+  .today-num{width:22px;height:22px;font-size:11px;border-radius:6px}
   .hide-mobile{display:none!important}
   .td-title{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .modal-overlay{padding:0;align-items:flex-end}
   .modal{max-width:100%;border-radius:16px 16px 0 0;max-height:90vh;overflow-y:auto}
-  .fab{bottom:18px;right:18px;width:48px;height:48px;border-radius:12px}
+  .fab{bottom:18px;right:18px;width:52px;height:52px;border-radius:14px}
   .rpt-row-inner{flex-wrap:wrap}
   .admin-card{flex-direction:column;align-items:flex-start}
   .admin-card-actions{width:100%}
   .admin-card-actions .btn-sm{flex:1;text-align:center}
+  .notif-popup{right:8px;width:calc(100vw - 16px);max-width:320px}
+  .notif-btn{padding:8px;min-width:36px;min-height:36px}
+  .btn-primary,.btn-outline,.btn-danger{min-height:42px;font-size:14px}
+  .btn-sm{min-height:32px!important}
+  .modal-input{font-size:16px;padding:11px 12px}
+  .stat-value{font-size:24px}
+  .kcard{padding:12px}
+  .kcard-title{font-size:14px}
 }
 @media(max-width:480px){
   .stats-grid{gap:6px}
@@ -295,10 +313,21 @@ textarea.modal-input{resize:vertical}
   .stat-value{font-size:22px}
   .team-grid{gap:6px}
   .team-card{padding:10px}
-  .cal-day-name{font-size:9px;padding:6px 2px}
+  .cal-day-name{font-size:10px;padding:6px 2px}
+  .cal-cell{min-height:54px}
+  .cal-task-text{font-size:8px}
+  .cal-task{padding:1px 2px}
+  .nav{gap:0}
+  .nav-btn{padding:8px 10px}
 }
 @media(min-width:769px) and (max-width:1024px){
   .kanban{grid-template-columns:repeat(2,1fr)!important}
+}
+
+/* iOS safe areas (notch, home indicator) */
+@supports(padding:max(0px)){
+  .app{padding-bottom:max(100px,env(safe-area-inset-bottom));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  .fab{bottom:max(18px,env(safe-area-inset-bottom))}
 }
 '''
 
@@ -306,7 +335,8 @@ LOGIN = r'''<!DOCTYPE html>
 <html lang="bg">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
 <title>Helios Marine — Tasks</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -370,7 +400,10 @@ APP = r'''<!DOCTYPE html>
 <html lang="bg">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Helios Marine — Tasks</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -617,30 +650,90 @@ async function loadCalendar() {
   const res = await fetch(`/api/calendar?month=${calMonth}&year=${calYear}`);
   renderCalendar(await res.json());
 }
+
+// Calculate Orthodox Easter (Sunday) for a given year - Meeus algorithm
+function orthodoxEaster(year) {
+  const a = year % 4, b = year % 7, c = year % 19;
+  const d = (19*c + 15) % 30;
+  const e = (2*a + 4*b - d + 34) % 7;
+  const month = Math.floor((d + e + 114) / 31);
+  const day = ((d + e + 114) % 31) + 1;
+  // Convert from Julian to Gregorian (add 13 days for 1900-2099)
+  const julianDate = new Date(year, month - 1, day);
+  julianDate.setDate(julianDate.getDate() + 13);
+  return julianDate;
+}
+
+function getBulgarianHolidays(year) {
+  // Fixed holidays
+  const holidays = {
+    [`${year}-01-01`]: 'Нова година',
+    [`${year}-03-03`]: 'Освобождение',
+    [`${year}-05-01`]: 'Ден на труда',
+    [`${year}-05-06`]: 'Гергьовден',
+    [`${year}-05-24`]: 'Ден на буквите',
+    [`${year}-09-06`]: 'Съединение',
+    [`${year}-09-22`]: 'Независимост',
+    [`${year}-11-01`]: 'Народни будители',
+    [`${year}-12-24`]: 'Бъдни вечер',
+    [`${year}-12-25`]: 'Рождество',
+    [`${year}-12-26`]: 'Рождество',
+  };
+  // Easter-based holidays
+  const easter = orthodoxEaster(year);
+  const goodFriday = new Date(easter); goodFriday.setDate(easter.getDate() - 2);
+  const holySaturday = new Date(easter); holySaturday.setDate(easter.getDate() - 1);
+  const easterMonday = new Date(easter); easterMonday.setDate(easter.getDate() + 1);
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  holidays[fmt(goodFriday)] = 'Разпети петък';
+  holidays[fmt(holySaturday)] = 'Велика събота';
+  holidays[fmt(easter)] = 'Великден';
+  holidays[fmt(easterMonday)] = 'Велики понеделник';
+  return holidays;
+}
+
 function renderCalendar(data) {
   const firstDay = new Date(calYear, calMonth-1, 1);
   const lastDay = new Date(calYear, calMonth, 0);
   let startDow = firstDay.getDay(); startDow = startDow===0?6:startDow-1;
   const totalDays = lastDay.getDate();
   const todayStr = new Date().toISOString().split('T')[0];
+  const holidays = getBulgarianHolidays(calYear);
   const byDate = {};
   data.tasks.forEach(t => { if(!byDate[t.due_date]) byDate[t.due_date]=[]; byDate[t.due_date].push(t); });
   let html = `<div class="cal-header">
     <button class="cal-nav" onclick="calMonth--;if(calMonth<1){calMonth=12;calYear--;}loadCalendar()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
     <span class="cal-title">${MONTHS[calMonth-1]} ${calYear}</span>
     <button class="cal-nav" onclick="calMonth++;if(calMonth>12){calMonth=1;calYear++;}loadCalendar()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
-  </div><div class="cal-grid"><div class="cal-days">${DAYS.map(d=>`<div class="cal-day-name">${d}</div>`).join('')}</div><div class="cal-cells">`;
+  </div><div class="cal-grid"><div class="cal-days">${DAYS.map((d,i)=>`<div class="cal-day-name${i>=5?' cal-weekend-name':''}">${d}</div>`).join('')}</div><div class="cal-cells">`;
   for(let i=0;i<startDow;i++) html+=`<div class="cal-cell empty"></div>`;
   for(let d=1;d<=totalDays;d++){
     const ds=`${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dateObj = new Date(calYear, calMonth-1, d);
+    const dow = dateObj.getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const holidayName = holidays[ds];
     const isToday=ds===todayStr;
     const dt=byDate[ds]||[];
-    html+=`<div class="cal-cell ${isToday?'today':''}" onclick="showDayTasks('${ds}')"><span class="cal-date ${isToday?'today-num':''}">${d}</span><div class="cal-tasks">`;
+    const cellClasses = ['cal-cell'];
+    if(isToday) cellClasses.push('today');
+    if(isWeekend) cellClasses.push('cal-weekend');
+    if(holidayName) cellClasses.push('cal-holiday');
+    html+=`<div class="${cellClasses.join(' ')}" onclick="showDayTasks('${ds}')" ${holidayName?`title="${holidayName}"`:''}>
+      <span class="cal-date ${isToday?'today-num':''}">${d}</span>
+      ${holidayName?`<div class="cal-holiday-label">${holidayName}</div>`:''}
+      <div class="cal-tasks">`;
     dt.slice(0,3).forEach(t=>{html+=`<div class="cal-task" style="border-left:2px solid ${SC[t.status]}"><span class="cal-task-text">${t.title.length>16?t.title.substring(0,16)+'...':t.title}</span></div>`;});
     if(dt.length>3) html+=`<div class="cal-more">+${dt.length-3}</div>`;
     html+=`</div></div>`;
   }
   html+=`</div></div>`;
+  // Legend
+  html+=`<div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:#8b949e;flex-wrap:wrap">
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.2)"></span>Празник</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(139,148,158,.12)"></span>Уикенд</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(198,163,80,.08)"></span>Днес</span>
+  </div>`;
   document.getElementById('v-calendar').innerHTML=html;
 }
 window.showDayTasks=function(ds){
