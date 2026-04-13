@@ -718,8 +718,18 @@ function applyStaticTranslations() {
 }
 
 // Legacy aliases - many existing functions reference these
-const PL = new Proxy({}, {get(_, k) { return t('pri_' + k); }});
-const SL = new Proxy({}, {get(_, k) { return t('st_' + k); }});
+const PL_KEYS = ['critical','high','medium','low'];
+const SL_KEYS = ['todo','progress','review','done'];
+const PL = new Proxy({}, {
+  get(_, k) { return t('pri_' + k); },
+  ownKeys() { return PL_KEYS; },
+  getOwnPropertyDescriptor() { return {enumerable: true, configurable: true}; }
+});
+const SL = new Proxy({}, {
+  get(_, k) { return t('st_' + k); },
+  ownKeys() { return SL_KEYS; },
+  getOwnPropertyDescriptor() { return {enumerable: true, configurable: true}; }
+});
 const SC = {todo:'#8b949e',progress:'#58a6ff',review:'#d29922',done:'#3fb950'};
 let MONTHS = T.months;
 let DAYS = T.days;
@@ -1189,20 +1199,20 @@ window.saveNewTask=async function(){
   closeModal(); await loadTasks(); switchView(curView);
 };
 window.openEditTask=function(id){
-  const t=allTasks.find(x=>x.id===id); if(!t) return;
+  const task=allTasks.find(x=>x.id===id); if(!task) return;
   const canDelete = IS_CEO || IS_MANAGER;
-  const whoOpts = USERS.map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${u.display_name}</option>`).join('');
-  const meOpt = `<option value="${USER_ID}" ${USER_ID===t.assignee_id?'selected':''}>${USER_ID===t.assignee_id?'Себе си':'— Себе си —'}</option>`;
+  const whoOpts = USERS.map(u=>`<option value="${u.id}" ${u.id===task.assignee_id?'selected':''}>${u.display_name}</option>`).join('');
+  const meOpt = `<option value="${USER_ID}" ${USER_ID===task.assignee_id?'selected':''}>${USER_ID===task.assignee_id?t('myself'):'— '+t('myself')+' —'}</option>`;
   openModal(t('edit'),`
-    <label>${t('title')}</label><input type="text" id="et-title" value="${t.title}" class="modal-input">
-    <label>${t('description')}</label><textarea id="et-desc" class="modal-input" rows="2">${t.description||''}</textarea>
-    <label>${t('project')}</label><select id="et-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}" ${p.id===t.project_id?'selected':''}>${p.name}</option>`).join('')}</select>
-    <label>${t('priority')}</label><select id="et-pri" class="modal-input">${Object.keys(PL).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PL[k]}</option>`).join('')}</select>
-    <label>${t('status')}</label><select id="et-st" class="modal-input">${Object.keys(SL).map(k=>`<option value="${k}" ${k===t.status?'selected':''}>${SL[k]}</option>`).join('')}</select>
+    <label>${t('title')}</label><input type="text" id="et-title" value="${task.title}" class="modal-input">
+    <label>${t('description')}</label><textarea id="et-desc" class="modal-input" rows="2">${task.description||''}</textarea>
+    <label>${t('project')}</label><select id="et-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}" ${p.id===task.project_id?'selected':''}>${p.name}</option>`).join('')}</select>
+    <label>${t('priority')}</label><select id="et-pri" class="modal-input">${Object.keys(PL).map(k=>`<option value="${k}" ${k===task.priority?'selected':''}>${PL[k]}</option>`).join('')}</select>
+    <label>${t('status')}</label><select id="et-st" class="modal-input">${Object.keys(SL).map(k=>`<option value="${k}" ${k===task.status?'selected':''}>${SL[k]}</option>`).join('')}</select>
     <label>${t('assignee')}</label><select id="et-who" class="modal-input">${meOpt}${whoOpts}</select>
-    <label>${t('due_date')}</label><input type="date" id="et-due" class="modal-input" value="${t.due_date||''}">
-    <div style="margin-top:14px"><button class="btn-outline btn-sm" onclick="showTaskHistory(${t.id})">${t('open_history')}</button><div id="audit-container"></div></div>
-    <div class="modal-actions">${canDelete?`<button class="btn-danger" onclick="deleteTask(${t.id})">${t('delete')}</button>`:''}<button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditTask(${t.id})">${t('save')}</button></div>`);
+    <label>${t('due_date')}</label><input type="date" id="et-due" class="modal-input" value="${task.due_date||''}">
+    <div style="margin-top:14px"><button class="btn-outline btn-sm" onclick="showTaskHistory(${task.id})">${t('open_history')}</button><div id="audit-container"></div></div>
+    <div class="modal-actions">${canDelete?`<button class="btn-danger" onclick="deleteTask(${task.id})">${t('delete')}</button>`:''}<button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditTask(${task.id})">${t('save')}</button></div>`);
 };
 
 window.showTaskHistory = async function(tid) {
