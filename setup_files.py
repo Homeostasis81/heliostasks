@@ -153,6 +153,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg-de
 .cal-cell.cal-holiday.cal-weekend{background:rgba(248,81,73,.08)}
 .cal-day-name.cal-weekend-name{color:rgba(139,148,158,.6)}
 .cal-holiday-label{font-size:9px;color:#f85149;font-weight:600;line-height:1.2;padding:1px 3px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+
+/* Leave indicators in calendar */
+.cal-leave-dots{display:flex;gap:3px;align-items:center;margin-bottom:3px;flex-wrap:wrap}
+.cal-leave-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cal-leave-more{font-size:9px;color:var(--text-muted);font-weight:600;line-height:1}
 .cal-date{font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:3px;padding:2px 4px}
 .today-num{background:var(--gold);color:var(--bg-deep);border-radius:6px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-weight:600}
 .cal-tasks{display:flex;flex-direction:column;gap:2px}
@@ -460,6 +465,7 @@ APP = r'''<!DOCTYPE html>
     <button class="nav-btn" data-view="calendar">Календар</button>
     <button class="nav-btn" data-view="projects">Проекти</button>
     <button class="nav-btn" data-view="reports">{% if is_ceo or is_manager %}Отчети{% else %}Дневен отчет{% endif %}</button>
+    <button class="nav-btn" data-view="leave">Отпуски</button>
     {% if is_ceo %}<button class="nav-btn" data-view="dashboard">Dashboard</button>{% endif %}
     {% if is_ceo %}<button class="nav-btn" data-view="admin">Админ</button>{% endif %}
   </nav>
@@ -470,6 +476,7 @@ APP = r'''<!DOCTYPE html>
     <div id="v-calendar" class="view"></div>
     <div id="v-projects" class="view"></div>
     <div id="v-reports" class="view"></div>
+    <div id="v-leave" class="view"></div>
     <div id="v-dashboard" class="view"></div>
     <div id="v-admin" class="view"></div>
   </main>
@@ -594,6 +601,52 @@ const I18N = {
     // Login + topbar
     welcome: 'Добре дошъл', logout: 'Изход',
     notif_title: 'Известия',
+    // Leave
+    nav_leave: 'Отпуски',
+    leave_title: 'Отпуски',
+    leave_balance: 'Годишен баланс',
+    leave_used: 'Ползвани',
+    leave_remaining: 'Оставащи',
+    leave_days: 'дни',
+    leave_request: 'Заявка за отпуск',
+    new_leave_request: '+ Нова заявка',
+    leave_type: 'Тип отпуск',
+    leave_paid: 'Платен',
+    leave_sick: 'Болничен',
+    leave_unpaid: 'Неплатен',
+    leave_other: 'Друго',
+    leave_start: 'От',
+    leave_end: 'До',
+    leave_reason: 'Причина / бележка',
+    leave_reason_ph: 'Незадължително...',
+    leave_working_days: 'работни дни',
+    leave_status_pending: 'Чака одобрение',
+    leave_status_approved: 'Одобрен',
+    leave_status_rejected: 'Отхвърлен',
+    leave_pending_approval: 'За одобрение',
+    leave_my_requests: 'Моите заявки',
+    leave_team_requests: 'Заявки на екипа',
+    leave_all_requests: 'Всички заявки',
+    leave_no_requests: 'Няма заявки',
+    leave_approve: 'Одобри',
+    leave_reject: 'Отхвърли',
+    leave_cancel: 'Откажи заявка',
+    leave_approved_by: 'Одобрено от',
+    leave_rejected_by: 'Отхвърлено от',
+    leave_decision_note: 'Бележка',
+    leave_decision_note_ph: 'Бележка към решението (незадължително)',
+    leave_submit: 'Подай заявка',
+    leave_insufficient: 'Недостатъчни оставащи дни',
+    leave_remaining_colon: 'Оставащи:',
+    leave_requested_colon: 'Заявени:',
+    leave_end_before_start: 'Крайната дата е преди началната',
+    leave_confirm_cancel: 'Сигурен ли си, че искаш да откажеш тази заявка?',
+    leave_sure_reject: 'Отхвърли ли заявката?',
+    leave_pending_notif: 'Заявки за одобрение',
+    leave_set_balance: 'Настрой баланс',
+    leave_balance_for: 'Баланс за',
+    leave_year: 'Година',
+    leave_total_days: 'Общо дни',
   },
   en: {
     role_ceo: 'CEO', role_manager: 'Manager', role_employee: 'Employee',
@@ -670,6 +723,52 @@ const I18N = {
     f_due_date: 'due date',
     welcome: 'Welcome', logout: 'Logout',
     notif_title: 'Notifications',
+    // Leave
+    nav_leave: 'Leave',
+    leave_title: 'Leave',
+    leave_balance: 'Annual balance',
+    leave_used: 'Used',
+    leave_remaining: 'Remaining',
+    leave_days: 'days',
+    leave_request: 'Leave request',
+    new_leave_request: '+ New request',
+    leave_type: 'Leave type',
+    leave_paid: 'Paid',
+    leave_sick: 'Sick',
+    leave_unpaid: 'Unpaid',
+    leave_other: 'Other',
+    leave_start: 'From',
+    leave_end: 'To',
+    leave_reason: 'Reason / note',
+    leave_reason_ph: 'Optional...',
+    leave_working_days: 'working days',
+    leave_status_pending: 'Pending',
+    leave_status_approved: 'Approved',
+    leave_status_rejected: 'Rejected',
+    leave_pending_approval: 'For approval',
+    leave_my_requests: 'My requests',
+    leave_team_requests: 'Team requests',
+    leave_all_requests: 'All requests',
+    leave_no_requests: 'No requests',
+    leave_approve: 'Approve',
+    leave_reject: 'Reject',
+    leave_cancel: 'Cancel request',
+    leave_approved_by: 'Approved by',
+    leave_rejected_by: 'Rejected by',
+    leave_decision_note: 'Note',
+    leave_decision_note_ph: 'Decision note (optional)',
+    leave_submit: 'Submit request',
+    leave_insufficient: 'Insufficient remaining days',
+    leave_remaining_colon: 'Remaining:',
+    leave_requested_colon: 'Requested:',
+    leave_end_before_start: 'End date is before start date',
+    leave_confirm_cancel: 'Are you sure you want to cancel this request?',
+    leave_sure_reject: 'Reject the request?',
+    leave_pending_notif: 'Pending requests',
+    leave_set_balance: 'Set balance',
+    leave_balance_for: 'Balance for',
+    leave_year: 'Year',
+    leave_total_days: 'Total days',
   }
 };
 
@@ -695,7 +794,7 @@ function applyStaticTranslations() {
   const roleBadge = document.querySelector('.user-badge');
   if (roleBadge) roleBadge.textContent = USER_ROLE === 'ceo' ? t('role_ceo') : USER_ROLE === 'manager' ? t('role_manager') : t('role_employee');
   // Nav buttons
-  const navMap = {kanban: 'nav_kanban', list: 'nav_list', calendar: 'nav_calendar', projects: 'nav_projects', dashboard: 'nav_dashboard', admin: 'nav_admin'};
+  const navMap = {kanban: 'nav_kanban', list: 'nav_list', calendar: 'nav_calendar', projects: 'nav_projects', leave: 'nav_leave', dashboard: 'nav_dashboard', admin: 'nav_admin'};
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const v = btn.dataset.view;
     if (navMap[v]) btn.textContent = t(navMap[v]);
@@ -772,7 +871,7 @@ async function loadNotifications() {
   try {
     const res = await fetch('/api/notifications');
     const n = await res.json();
-    const total = (n.overdue||0) + (n.team_no_report||0) + (!n.has_report_today && USER_ROLE === 'employee' ? 1 : 0);
+    const total = (n.overdue||0) + (n.team_no_report||0) + (n.pending_leave||0) + (!n.has_report_today && USER_ROLE === 'employee' ? 1 : 0);
     const badge = document.getElementById('notif-badge');
     if (total > 0) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'flex'; }
     else { badge.style.display = 'none'; }
@@ -819,6 +918,14 @@ async function loadNotifications() {
         <div class="notif-content"><span>${t('team_no_report')}</span><span class="notif-count" style="color:#c6a350">${n.team_no_report}</span></div>
       </div>`;
     }
+    if ((USER_ROLE === 'ceo' || USER_ROLE === 'manager') && n.pending_leave > 0) {
+      html += `<div class="notif-item" onclick="document.getElementById('notif-popup').classList.remove('show');switchView('leave')">
+        <div class="notif-icon" style="background:rgba(88,166,255,.15);color:#58a6ff">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="notif-content"><span>${t('leave_pending_notif')}</span><span class="notif-count" style="color:#58a6ff">${n.pending_leave}</span></div>
+      </div>`;
+    }
     if (!html) html = `<div class="notif-empty">${t('all_under_control')}</div>`;
     list.innerHTML = html;
   } catch(e) { console.error(e); }
@@ -835,6 +942,7 @@ function switchView(v) {
   else if (v === 'calendar') loadCalendar();
   else if (v === 'projects') loadProjects();
   else if (v === 'reports') loadReports();
+  else if (v === 'leave') loadLeave();
   else if (v === 'dashboard') loadDashboard();
   else if (v === 'admin') loadAdmin();
 }
@@ -898,8 +1006,13 @@ function renderList() {
 }
 
 async function loadCalendar() {
-  const res = await fetch(`/api/calendar?month=${calMonth}&year=${calYear}`);
-  renderCalendar(await res.json());
+  const [res, leaveRes] = await Promise.all([
+    fetch(`/api/calendar?month=${calMonth}&year=${calYear}`),
+    fetch(`/api/leave/calendar?month=${calMonth}&year=${calYear}`)
+  ]);
+  const data = await res.json();
+  data.leave = await leaveRes.json();
+  renderCalendar(data);
 }
 
 // Calculate Orthodox Easter (Sunday) for a given year - Meeus algorithm
@@ -952,6 +1065,18 @@ function renderCalendar(data) {
   const holidays = getBulgarianHolidays(calYear);
   const byDate = {};
   data.tasks.forEach(t => { if(!byDate[t.due_date]) byDate[t.due_date]=[]; byDate[t.due_date].push(t); });
+  // Expand leave entries into per-day map
+  const leaveByDate = {};
+  (data.leave||[]).forEach(lv => {
+    const sd = new Date(lv.start_date), ed = new Date(lv.end_date);
+    const cur = new Date(sd);
+    while (cur <= ed) {
+      const k = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+      if (!leaveByDate[k]) leaveByDate[k] = [];
+      leaveByDate[k].push(lv);
+      cur.setDate(cur.getDate()+1);
+    }
+  });
   let html = `<div class="cal-header">
     <button class="cal-nav" onclick="calMonth--;if(calMonth<1){calMonth=12;calYear--;}loadCalendar()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
     <span class="cal-title">${MONTHS[calMonth-1]} ${calYear}</span>
@@ -966,15 +1091,23 @@ function renderCalendar(data) {
     const holidayName = holidays[ds];
     const isToday=ds===todayStr;
     const dt=byDate[ds]||[];
+    const lvs=leaveByDate[ds]||[];
     const cellClasses = ['cal-cell'];
     if(isToday) cellClasses.push('today');
     if(isWeekend) cellClasses.push('cal-weekend');
     if(holidayName) cellClasses.push('cal-holiday');
+    // Build leave dots (up to 3) + count badge if more
+    let leaveDots = '';
+    if(lvs.length) {
+      const shown = lvs.slice(0,3);
+      leaveDots = `<div class="cal-leave-dots">${shown.map(lv => `<span class="cal-leave-dot" style="background:${LEAVE_TYPE_COLORS[lv.leave_type]};${lv.status==='pending'?'opacity:.5':''}" title="${lv.display_name} — ${LEAVE_TYPE_LABELS()[lv.leave_type]}"></span>`).join('')}${lvs.length>3?`<span class="cal-leave-more">+${lvs.length-3}</span>`:''}</div>`;
+    }
     html+=`<div class="${cellClasses.join(' ')}" onclick="showDayTasks('${ds}')" ${holidayName?`title="${holidayName}"`:''}>
       <span class="cal-date ${isToday?'today-num':''}">${d}</span>
       ${holidayName?`<div class="cal-holiday-label">${holidayName}</div>`:''}
+      ${leaveDots}
       <div class="cal-tasks">`;
-    dt.slice(0,3).forEach(t=>{html+=`<div class="cal-task" style="border-left:2px solid ${SC[t.status]}"><span class="cal-task-text">${t.title.length>16?t.title.substring(0,16)+'...':t.title}</span></div>`;});
+    dt.slice(0,3).forEach(ti=>{html+=`<div class="cal-task" style="border-left:2px solid ${SC[ti.status]}"><span class="cal-task-text">${ti.title.length>16?ti.title.substring(0,16)+'...':ti.title}</span></div>`;});
     if(dt.length>3) html+=`<div class="cal-more">+${dt.length-3}</div>`;
     html+=`</div></div>`;
   }
@@ -984,6 +1117,9 @@ function renderCalendar(data) {
     <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.2)"></span>${t('legend_holiday')}</span>
     <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(139,148,158,.12)"></span>${t('legend_weekend')}</span>
     <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(198,163,80,.08)"></span>${t('legend_today')}</span>
+    <span style="display:flex;align-items:center;gap:6px"><span class="cal-leave-dot" style="background:${LEAVE_TYPE_COLORS.paid}"></span>${t('leave_paid')}</span>
+    <span style="display:flex;align-items:center;gap:6px"><span class="cal-leave-dot" style="background:${LEAVE_TYPE_COLORS.sick}"></span>${t('leave_sick')}</span>
+    <span style="display:flex;align-items:center;gap:6px"><span class="cal-leave-dot" style="background:${LEAVE_TYPE_COLORS.unpaid}"></span>${t('leave_unpaid')}</span>
   </div>`;
   document.getElementById('v-calendar').innerHTML=html;
 }
@@ -1115,6 +1251,163 @@ window.submitReport=async function(){
   const note=document.getElementById('rpt-note').value.trim();
   await fetch('/api/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items,note,report_date:new Date().toISOString().split('T')[0]})});
   loadReports();
+};
+
+// === LEAVE ===
+const LEAVE_TYPE_LABELS = () => ({paid: t('leave_paid'), sick: t('leave_sick'), unpaid: t('leave_unpaid'), other: t('leave_other')});
+const LEAVE_TYPE_COLORS = {paid: '#58a6ff', sick: '#f85149', unpaid: '#8b949e', other: '#c6a350'};
+const LEAVE_STATUS_LABELS = () => ({pending: t('leave_status_pending'), approved: t('leave_status_approved'), rejected: t('leave_status_rejected')});
+const LEAVE_STATUS_COLORS = {pending: '#d29922', approved: '#3fb950', rejected: '#8b949e'};
+
+async function loadLeave() {
+  const el = document.getElementById('v-leave');
+  const canManage = IS_CEO || IS_MANAGER;
+  // Fetch balance for self and all requests visible
+  const [balRes, reqRes] = await Promise.all([
+    fetch('/api/leave/balance'),
+    fetch('/api/leave/requests')
+  ]);
+  const bal = await balRes.json();
+  const reqs = await reqRes.json();
+  const typeLabels = LEAVE_TYPE_LABELS();
+  const statusLabels = LEAVE_STATUS_LABELS();
+
+  let html = `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);max-width:540px;margin-bottom:18px">
+    <div class="stat-card"><div class="stat-label">${t('leave_balance')}</div><div class="stat-value">${bal.total}</div><div class="stat-sub">${bal.year}</div></div>
+    <div class="stat-card"><div class="stat-label">${t('leave_used')}</div><div class="stat-value" style="color:#d29922">${bal.used}</div></div>
+    <div class="stat-card"><div class="stat-label">${t('leave_remaining')}</div><div class="stat-value" style="color:#3fb950">${bal.remaining}</div></div>
+  </div>`;
+
+  html += `<button class="btn-primary" onclick="openLeaveRequestModal()" style="margin-bottom:18px">${t('new_leave_request')}</button>`;
+
+  // Pending section for CEO/manager
+  const pending = reqs.filter(r => r.status === 'pending' && r.user_id !== USER_ID);
+  if (canManage && pending.length > 0) {
+    html += `<div class="sect-title" style="margin-top:8px">${t('leave_pending_approval')} <span style="color:#d29922;margin-left:6px;font-size:11px">${pending.length}</span></div>`;
+    pending.forEach(r => { html += leaveRequestCard(r, true, typeLabels, statusLabels); });
+  }
+
+  // My requests
+  const mine = reqs.filter(r => r.user_id === USER_ID);
+  html += `<div class="sect-title" style="margin-top:18px">${t('leave_my_requests')}</div>`;
+  if (!mine.length) {
+    html += `<div style="color:#8b949e;font-size:13px;padding:12px">${t('leave_no_requests')}</div>`;
+  } else {
+    mine.forEach(r => { html += leaveRequestCard(r, false, typeLabels, statusLabels); });
+  }
+
+  // Team requests (already approved/rejected others) for managers and CEO
+  const teamOther = reqs.filter(r => r.user_id !== USER_ID && r.status !== 'pending');
+  if (canManage && teamOther.length > 0) {
+    html += `<div class="sect-title" style="margin-top:18px">${t('leave_team_requests')}</div>`;
+    teamOther.forEach(r => { html += leaveRequestCard(r, false, typeLabels, statusLabels); });
+  }
+
+  el.innerHTML = html;
+}
+
+function leaveRequestCard(r, showActions, typeLabels, statusLabels) {
+  const typeColor = LEAVE_TYPE_COLORS[r.leave_type];
+  const statusColor = LEAVE_STATUS_COLORS[r.status];
+  const canCancel = r.user_id === USER_ID && r.status === 'pending';
+  const isMine = r.user_id === USER_ID;
+  const dateRange = r.start_date === r.end_date ? r.start_date : `${r.start_date} → ${r.end_date}`;
+  const reasonHtml = r.reason ? `<div style="font-size:12px;color:#8b949e;margin-top:6px;font-style:italic">"${r.reason}"</div>` : '';
+  const noteHtml = r.decision_note ? `<div style="font-size:11px;color:#8b949e;margin-top:4px">${t('leave_decision_note')}: ${r.decision_note}</div>` : '';
+  const approverHtml = r.approver_name && r.status !== 'pending' ?
+    `<div style="font-size:11px;color:#8b949e;margin-top:2px">${r.status==='approved'?t('leave_approved_by'):t('leave_rejected_by')}: ${r.approver_name}</div>` : '';
+
+  return `<div class="admin-card" style="flex-direction:column;align-items:stretch;gap:8px;padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:200px">
+        ${!isMine ? `<span class="avatar-sm" style="background:${r.color}">${r.initials}</span>` : ''}
+        <div>
+          ${!isMine ? `<div class="admin-name" style="font-size:13px">${r.display_name}</div>` : ''}
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+            <span style="display:inline-flex;align-items:center;gap:4px;background:${typeColor}22;color:${typeColor};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${typeLabels[r.leave_type]}</span>
+            <span style="color:#e6edf3;font-size:13px;font-weight:500">${dateRange}</span>
+            <span style="color:#8b949e;font-size:11px">${r.working_days} ${t('leave_working_days')}</span>
+          </div>
+        </div>
+      </div>
+      <span style="background:${statusColor}22;color:${statusColor};padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap">${statusLabels[r.status]}</span>
+    </div>
+    ${reasonHtml}
+    ${approverHtml}
+    ${noteHtml}
+    ${showActions || canCancel ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+      ${showActions ? `<button class="btn-primary btn-sm" onclick="decideLeave(${r.id},'approved')">${t('leave_approve')}</button>
+        <button class="btn-danger btn-sm" onclick="decideLeave(${r.id},'rejected')">${t('leave_reject')}</button>` : ''}
+      ${canCancel ? `<button class="btn-outline btn-sm" onclick="cancelLeaveRequest(${r.id})">${t('leave_cancel')}</button>` : ''}
+    </div>` : ''}
+  </div>`;
+}
+
+window.openLeaveRequestModal = function() {
+  const today = new Date().toISOString().split('T')[0];
+  const typeLabels = LEAVE_TYPE_LABELS();
+  openModal(t('leave_request'), `
+    <label>${t('leave_type')}</label>
+    <select id="lr-type" class="modal-input">
+      <option value="paid">${typeLabels.paid}</option>
+      <option value="sick">${typeLabels.sick}</option>
+      <option value="unpaid">${typeLabels.unpaid}</option>
+      <option value="other">${typeLabels.other}</option>
+    </select>
+    <label>${t('leave_start')}</label>
+    <input type="date" id="lr-start" class="modal-input" value="${today}">
+    <label>${t('leave_end')}</label>
+    <input type="date" id="lr-end" class="modal-input" value="${today}">
+    <label>${t('leave_reason')}</label>
+    <textarea id="lr-reason" class="modal-input" rows="2" placeholder="${t('leave_reason_ph')}"></textarea>
+    <div id="lr-msg" style="font-size:12px;color:#f85149;margin-top:8px;display:none"></div>
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="submitLeaveRequest()">${t('leave_submit')}</button></div>
+  `);
+};
+
+window.submitLeaveRequest = async function() {
+  const leave_type = document.getElementById('lr-type').value;
+  const start_date = document.getElementById('lr-start').value;
+  const end_date = document.getElementById('lr-end').value;
+  const reason = document.getElementById('lr-reason').value.trim();
+  const msg = document.getElementById('lr-msg');
+  msg.style.display = 'none';
+  if (!start_date || !end_date) { msg.textContent = t('leave_end_before_start'); msg.style.display = 'block'; return; }
+  if (end_date < start_date) { msg.textContent = t('leave_end_before_start'); msg.style.display = 'block'; return; }
+  const r = await fetch('/api/leave/requests', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({leave_type, start_date, end_date, reason})});
+  const d = await r.json();
+  if (d.error === 'insufficient_balance') {
+    msg.textContent = `${t('leave_insufficient')}. ${t('leave_remaining_colon')} ${d.remaining}, ${t('leave_requested_colon')} ${d.requested}`;
+    msg.style.display = 'block';
+    return;
+  }
+  if (d.error) { msg.textContent = t('error_occurred'); msg.style.display = 'block'; return; }
+  closeModal();
+  loadLeave();
+  loadNotifications();
+};
+
+window.decideLeave = async function(id, decision) {
+  let note = '';
+  if (decision === 'rejected') {
+    if (!confirm(t('leave_sure_reject'))) return;
+    note = prompt(t('leave_decision_note_ph')) || '';
+  }
+  const r = await fetch(`/api/leave/requests/${id}/decide`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({decision, note})});
+  const d = await r.json();
+  if (d.error === 'insufficient_balance') {
+    alert(`${t('leave_insufficient')} (${t('leave_remaining_colon')} ${d.remaining})`);
+    return;
+  }
+  loadLeave();
+  loadNotifications();
+};
+
+window.cancelLeaveRequest = async function(id) {
+  if (!confirm(t('leave_confirm_cancel'))) return;
+  await fetch(`/api/leave/requests/${id}`, {method:'DELETE'});
+  loadLeave();
+  loadNotifications();
 };
 
 async function loadDashboard(){
@@ -1261,7 +1554,7 @@ async function loadAdmin(){
     const roleBadge = u.role==='manager' ? `<span style="font-size:10px;color:#c6a350;background:rgba(198,163,80,.15);padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px">${t('role_manager')}</span>` : '';
     const visBtn = u.role==='manager' ? `<button class="btn-outline btn-sm" onclick="openVisibility(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">${t('visibility')}</button>` : '';
     html+=`<div class="admin-card"><div class="admin-card-left"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><div><div class="admin-name">${u.display_name}${roleBadge}</div><div class="admin-sub">@${u.username}</div></div></div>
-      <div class="admin-card-actions">${visBtn}<button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}','${u.role}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">${t('delete')}</button></div></div>`;
+      <div class="admin-card-actions">${visBtn}<button class="btn-outline btn-sm" onclick="openLeaveBalance(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">${t('leave_balance')}</button><button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}','${u.role}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">${t('delete')}</button></div></div>`;
   });
   html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>${t('projects_admin')}</span><button class="btn-outline btn-sm" onclick="openProjectModal()">${t('new_project_btn')}</button></div>`;
   projs.forEach(p=>{
@@ -1328,6 +1621,30 @@ window.openVisibility=async function(managerId, managerName){
 window.saveVisibility=async function(managerId){
   const checked = Array.from(document.querySelectorAll('.vis-cb:checked')).map(cb => parseInt(cb.dataset.id));
   await fetch(`/api/visibility/${managerId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employee_ids: checked})});
+  closeModal();
+};
+
+window.openLeaveBalance = async function(uid, name) {
+  const year = new Date().getFullYear();
+  const r = await fetch(`/api/leave/balance/${uid}?year=${year}`);
+  const bal = await r.json();
+  openModal(`${t('leave_balance_for')} ${name}`, `
+    <label>${t('leave_year')}</label>
+    <input type="number" id="lb-year" class="modal-input" value="${year}" min="2020" max="2099">
+    <label>${t('leave_total_days')}</label>
+    <input type="number" id="lb-total" class="modal-input" value="${bal.total}" min="0" max="60">
+    <div style="display:flex;gap:12px;margin-top:12px;font-size:12px;color:#8b949e">
+      <span>${t('leave_used')}: <b style="color:#d29922">${bal.used}</b></span>
+      <span>${t('leave_remaining')}: <b style="color:#3fb950">${bal.remaining}</b></span>
+    </div>
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveLeaveBalance(${uid})">${t('save')}</button></div>
+  `);
+};
+
+window.saveLeaveBalance = async function(uid) {
+  const year = parseInt(document.getElementById('lb-year').value);
+  const paid_total = parseInt(document.getElementById('lb-total').value);
+  await fetch(`/api/leave/balance/${uid}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({year, paid_total})});
   closeModal();
 };
 </script>

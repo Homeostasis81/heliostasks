@@ -98,6 +98,62 @@ def log_action(user_id, entity_type, entity_id, action, details=None):
     except Exception as e:
         print(f"Audit log error: {e}")
 
+# === Bulgarian holidays + working days ===
+def orthodox_easter(year):
+    """Calculate Orthodox Easter date for given year."""
+    a = year % 4
+    b = year % 7
+    c = year % 19
+    d = (19*c + 15) % 30
+    e = (2*a + 4*b - d + 34) % 7
+    month = (d + e + 114) // 31
+    day = ((d + e + 114) % 31) + 1
+    julian = date(year, month, day)
+    return julian + timedelta(days=13)
+
+def bg_holidays(year):
+    """Return set of Bulgarian holiday dates for the year."""
+    holidays = {
+        date(year, 1, 1), date(year, 3, 3), date(year, 5, 1), date(year, 5, 6),
+        date(year, 5, 24), date(year, 9, 6), date(year, 9, 22), date(year, 11, 1),
+        date(year, 12, 24), date(year, 12, 25), date(year, 12, 26),
+    }
+    easter = orthodox_easter(year)
+    holidays.add(easter - timedelta(days=2))  # Good Friday
+    holidays.add(easter - timedelta(days=1))  # Holy Saturday
+    holidays.add(easter)
+    holidays.add(easter + timedelta(days=1))  # Easter Monday
+    return holidays
+
+def working_days_between(start_date, end_date):
+    """Count working days (Mon-Fri, excluding BG holidays) in range inclusive."""
+    if isinstance(start_date, str): start_date = date.fromisoformat(start_date)
+    if isinstance(end_date, str): end_date = date.fromisoformat(end_date)
+    if end_date < start_date: return 0
+    holidays = bg_holidays(start_date.year) | bg_holidays(end_date.year)
+    count = 0
+    d = start_date
+    while d <= end_date:
+        if d.weekday() < 5 and d not in holidays:
+            count += 1
+        d += timedelta(days=1)
+    return count
+
+def get_or_create_balance(db, user_id, year, default=20):
+    """Get leave balance for user, creating with default if missing."""
+    row = db.execute("SELECT * FROM leave_balances WHERE user_id=? AND year=?", (user_id, year)).fetchone()
+    if row: return dict(row)
+    db.execute("INSERT INTO leave_balances (user_id, year, paid_total) VALUES (?,?,?)", (user_id, year, default))
+    return {"user_id": user_id, "year": year, "paid_total": default}
+
+def compute_balance(db, user_id, year):
+    """Return {total, used, remaining} for paid leave in year."""
+    bal = get_or_create_balance(db, user_id, year)
+    used = db.execute("""SELECT COALESCE(SUM(working_days),0) as s FROM leave_requests
+        WHERE user_id=? AND leave_type='paid' AND status='approved'
+        AND strftime('%Y', start_date)=?""", (user_id, str(year))).fetchone()["s"]
+    return {"total": bal["paid_total"], "used": used, "remaining": bal["paid_total"] - used}
+
 def init_db():
     with get_db() as db:
         db.executescript("""
@@ -166,6 +222,32 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
         CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
+        CREATE TABLE IF NOT EXISTS leave_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            leave_type TEXT NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            working_days INTEGER NOT NULL DEFAULT 0,
+            reason TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            approved_by INTEGER,
+            decided_at TIMESTAMP,
+            decision_note TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_leave_user ON leave_requests(user_id);
+        CREATE INDEX IF NOT EXISTS idx_leave_dates ON leave_requests(start_date, end_date);
+        CREATE TABLE IF NOT EXISTS leave_balances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            year INTEGER NOT NULL,
+            paid_total INTEGER NOT NULL DEFAULT 20,
+            UNIQUE(user_id, year),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
         """)
         if not db.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
             users_data = [
@@ -607,9 +689,21 @@ async def api_notifications(request: Request):
             for eid in visible_ids:
                 r = db.execute("SELECT id FROM daily_reports WHERE user_id=? AND report_date=?", (eid, today)).fetchone()
                 if not r: team_no_report += 1
+        # Pending leave requests requiring my decision
+        pending_leave = 0
+        if user["role"] == "ceo":
+            pending_leave = db.execute("SELECT COUNT(*) as c FROM leave_requests WHERE status='pending'").fetchone()["c"]
+        elif user["role"] == "manager":
+            visible = [v["employee_id"] for v in db.execute(
+                "SELECT employee_id FROM report_visibility WHERE manager_id=?", (user["id"],)).fetchall()]
+            if visible:
+                placeholders = ",".join(["?"]*len(visible))
+                pending_leave = db.execute(f"""SELECT COUNT(*) as c FROM leave_requests
+                    WHERE status='pending' AND user_id IN ({placeholders})""", visible).fetchone()["c"]
     return JSONResponse({
         "overdue": my_overdue, "today": my_today, "active": my_active,
-        "has_report_today": has_report_today, "team_no_report": team_no_report
+        "has_report_today": has_report_today, "team_no_report": team_no_report,
+        "pending_leave": pending_leave
     })
 
 # === Backups (CEO only) ===
@@ -643,6 +737,212 @@ async def download_backup(request: Request, name: str):
     fp = os.path.join(BACKUP_DIR, name)
     if not os.path.exists(fp): return JSONResponse({"error": "not_found"}, 404)
     return FileResponse(fp, filename=name, media_type="application/octet-stream")
+
+# === Leave requests ===
+VALID_LEAVE_TYPES = ("paid", "sick", "unpaid", "other")
+
+def _can_manage_leave_for(user, target_user_id, db):
+    """True if `user` can approve/reject leave of target_user_id."""
+    if is_ceo(user): return True
+    if user["role"] == "manager":
+        r = db.execute("SELECT 1 FROM report_visibility WHERE manager_id=? AND employee_id=?",
+                       (user["id"], target_user_id)).fetchone()
+        return r is not None
+    return False
+
+@app.get("/api/leave/requests")
+async def list_leave_requests(request: Request, user_id: Optional[int] = None, status: Optional[str] = None):
+    """
+    For CEO: all requests (optionally filter by user_id or status).
+    For Manager: self + employees they have visibility on.
+    For Employee: only own requests.
+    """
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    with get_db() as db:
+        where = []
+        params = []
+        if user["role"] == "ceo":
+            if user_id: where.append("lr.user_id=?"); params.append(user_id)
+        elif user["role"] == "manager":
+            visible = [v["employee_id"] for v in db.execute(
+                "SELECT employee_id FROM report_visibility WHERE manager_id=?", (user["id"],)).fetchall()]
+            visible_ids = visible + [user["id"]]
+            if user_id:
+                if user_id not in visible_ids: return JSONResponse([])
+                where.append("lr.user_id=?"); params.append(user_id)
+            else:
+                placeholders = ",".join(["?"]*len(visible_ids))
+                where.append(f"lr.user_id IN ({placeholders})"); params.extend(visible_ids)
+        else:
+            where.append("lr.user_id=?"); params.append(user["id"])
+        if status:
+            where.append("lr.status=?"); params.append(status)
+        wc = ("WHERE " + " AND ".join(where)) if where else ""
+        rows = db.execute(f"""SELECT lr.*, u.display_name, u.color, u.initials,
+            a.display_name as approver_name
+            FROM leave_requests lr
+            JOIN users u ON lr.user_id=u.id
+            LEFT JOIN users a ON lr.approved_by=a.id
+            {wc} ORDER BY
+              CASE lr.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
+              lr.start_date DESC""", params).fetchall()
+    return JSONResponse([dict(r) for r in rows])
+
+@app.post("/api/leave/requests")
+async def create_leave_request(request: Request):
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    data = await request.json()
+    leave_type = data.get("leave_type")
+    start = data.get("start_date")
+    end = data.get("end_date")
+    reason = data.get("reason", "").strip()
+    target_user_id = data.get("user_id", user["id"])
+    if leave_type not in VALID_LEAVE_TYPES:
+        return JSONResponse({"error": "invalid_type"}, 400)
+    if not start or not end:
+        return JSONResponse({"error": "missing_dates"}, 400)
+    try:
+        sd = date.fromisoformat(start)
+        ed = date.fromisoformat(end)
+    except Exception:
+        return JSONResponse({"error": "bad_date"}, 400)
+    if ed < sd: return JSONResponse({"error": "end_before_start"}, 400)
+    # Only CEO can file on behalf of others
+    if target_user_id != user["id"] and not is_ceo(user):
+        return JSONResponse({"error": "forbidden"}, 403)
+    wd = working_days_between(sd, ed)
+    # Check balance for paid leave
+    if leave_type == "paid" and wd > 0:
+        with get_db() as db:
+            bal = compute_balance(db, target_user_id, sd.year)
+            if wd > bal["remaining"]:
+                return JSONResponse({"error": "insufficient_balance", "remaining": bal["remaining"], "requested": wd}, 400)
+    with get_db() as db:
+        # Auto-approve if CEO creates for anyone, or for non-paid types where company often just records
+        auto_approve = is_ceo(user) and target_user_id != user["id"]
+        status = "approved" if auto_approve else "pending"
+        r = db.execute("""INSERT INTO leave_requests
+            (user_id, leave_type, start_date, end_date, working_days, reason, status, approved_by, decided_at)
+            VALUES (?,?,?,?,?,?,?,?,?)""",
+            (target_user_id, leave_type, start, end, wd, reason, status,
+             user["id"] if auto_approve else None,
+             datetime.now().isoformat() if auto_approve else None))
+        lid = r.lastrowid
+    log_action(user["id"], "leave", lid, "created" if not auto_approve else "created_approved",
+               {"type": leave_type, "days": wd, "target": target_user_id})
+    return JSONResponse({"ok": True, "id": lid, "working_days": wd, "status": status})
+
+@app.post("/api/leave/requests/{lid}/decide")
+async def decide_leave(request: Request, lid: int):
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    data = await request.json()
+    decision = data.get("decision")  # "approved" or "rejected"
+    note = data.get("note", "").strip()
+    if decision not in ("approved", "rejected"):
+        return JSONResponse({"error": "invalid_decision"}, 400)
+    with get_db() as db:
+        req = db.execute("SELECT * FROM leave_requests WHERE id=?", (lid,)).fetchone()
+        if not req: return JSONResponse({"error": "not_found"}, 404)
+        if req["status"] != "pending":
+            return JSONResponse({"error": "already_decided"}, 400)
+        if not _can_manage_leave_for(user, req["user_id"], db):
+            return JSONResponse({"error": "forbidden"}, 403)
+        # Re-verify balance at decision time for paid
+        if decision == "approved" and req["leave_type"] == "paid":
+            sd = date.fromisoformat(req["start_date"])
+            bal = compute_balance(db, req["user_id"], sd.year)
+            if req["working_days"] > bal["remaining"]:
+                return JSONResponse({"error": "insufficient_balance", "remaining": bal["remaining"]}, 400)
+        db.execute("UPDATE leave_requests SET status=?, approved_by=?, decided_at=?, decision_note=? WHERE id=?",
+                   (decision, user["id"], datetime.now().isoformat(), note, lid))
+    log_action(user["id"], "leave", lid, decision, {"note": note})
+    return JSONResponse({"ok": True})
+
+@app.delete("/api/leave/requests/{lid}")
+async def cancel_leave(request: Request, lid: int):
+    """Users can cancel their own pending requests. CEO/managers can cancel anyone's."""
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    with get_db() as db:
+        req = db.execute("SELECT * FROM leave_requests WHERE id=?", (lid,)).fetchone()
+        if not req: return JSONResponse({"error": "not_found"}, 404)
+        # Allow owner to cancel own pending request; CEO/manager with visibility can cancel any status
+        is_owner = req["user_id"] == user["id"]
+        can_manage = _can_manage_leave_for(user, req["user_id"], db)
+        if not (is_owner or can_manage):
+            return JSONResponse({"error": "forbidden"}, 403)
+        if is_owner and not can_manage and req["status"] != "pending":
+            return JSONResponse({"error": "already_decided"}, 400)
+        db.execute("DELETE FROM leave_requests WHERE id=?", (lid,))
+    log_action(user["id"], "leave", lid, "cancelled")
+    return JSONResponse({"ok": True})
+
+@app.get("/api/leave/balance")
+async def my_balance(request: Request, year: Optional[int] = None):
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    y = year or date.today().year
+    with get_db() as db:
+        bal = compute_balance(db, user["id"], y)
+    return JSONResponse({**bal, "year": y})
+
+@app.get("/api/leave/balance/{uid}")
+async def user_balance(request: Request, uid: int, year: Optional[int] = None):
+    """CEO/manager can view a specific user's balance."""
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    y = year or date.today().year
+    with get_db() as db:
+        if not (is_ceo(user) or _can_manage_leave_for(user, uid, db) or user["id"] == uid):
+            return JSONResponse({"error": "forbidden"}, 403)
+        bal = compute_balance(db, uid, y)
+    return JSONResponse({**bal, "year": y, "user_id": uid})
+
+@app.put("/api/leave/balance/{uid}")
+async def set_balance(request: Request, uid: int):
+    """CEO only: set total paid leave for a user in a year."""
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+    data = await request.json()
+    y = data.get("year", date.today().year)
+    total = int(data.get("paid_total", 20))
+    with get_db() as db:
+        db.execute("""INSERT INTO leave_balances (user_id, year, paid_total) VALUES (?,?,?)
+            ON CONFLICT(user_id, year) DO UPDATE SET paid_total=excluded.paid_total""",
+            (uid, y, total))
+    log_action(user["id"], "leave_balance", uid, "updated", {"year": y, "total": total})
+    return JSONResponse({"ok": True})
+
+@app.get("/api/leave/calendar")
+async def leave_calendar(request: Request, month: int, year: int):
+    """Return approved leave dates for users the requester can see, to show on calendar."""
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    from calendar import monthrange
+    start = date(year, month, 1)
+    end = date(year, month, monthrange(year, month)[1])
+    with get_db() as db:
+        if is_ceo(user):
+            visible_ids = [u["id"] for u in db.execute("SELECT id FROM users").fetchall()]
+        elif user["role"] == "manager":
+            visible = [v["employee_id"] for v in db.execute(
+                "SELECT employee_id FROM report_visibility WHERE manager_id=?", (user["id"],)).fetchall()]
+            visible_ids = visible + [user["id"]]
+        else:
+            visible_ids = [user["id"]]
+        if not visible_ids: return JSONResponse([])
+        placeholders = ",".join(["?"]*len(visible_ids))
+        rows = db.execute(f"""SELECT lr.id, lr.user_id, lr.leave_type, lr.start_date, lr.end_date, lr.status,
+                u.display_name, u.color, u.initials
+            FROM leave_requests lr JOIN users u ON lr.user_id=u.id
+            WHERE lr.status IN ('approved','pending')
+              AND lr.user_id IN ({placeholders})
+              AND NOT (lr.end_date < ? OR lr.start_date > ?)""",
+            (*visible_ids, start.isoformat(), end.isoformat())).fetchall()
+    return JSONResponse([dict(r) for r in rows])
 
 if __name__ == "__main__":
     import uvicorn
