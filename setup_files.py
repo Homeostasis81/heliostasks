@@ -387,6 +387,9 @@ APP = r'''<!DOCTYPE html>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         <span id="notif-badge" class="notif-badge" style="display:none">0</span>
       </button>
+      <button id="pass-btn" class="notif-btn" title="Смени паролата" onclick="openChangePasswordModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </button>
       <span class="user-name">{{ user.display_name }}</span>
       <span class="user-badge">{% if is_ceo %}CEO{% elif is_manager %}Мениджър{% else %}Служител{% endif %}</span>
       <a href="/logout" class="logout-btn" title="Изход">
@@ -801,6 +804,38 @@ async function loadDashboard(){
 // === MODALS ===
 function openModal(title,bodyHtml){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=bodyHtml;document.getElementById('modal-overlay').classList.add('show');}
 function closeModal(){document.getElementById('modal-overlay').classList.remove('show');}
+
+window.openChangePasswordModal = function() {
+  openModal('Смяна на парола', `
+    <label>Текуща парола</label>
+    <input type="password" id="cp-old" class="modal-input" autocomplete="current-password">
+    <label>Нова парола</label>
+    <input type="password" id="cp-new" class="modal-input" autocomplete="new-password" placeholder="Поне 4 символа">
+    <label>Повтори новата парола</label>
+    <input type="password" id="cp-new2" class="modal-input" autocomplete="new-password">
+    <div id="cp-msg" style="font-size:12px;color:#f85149;margin-top:8px;display:none"></div>
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="submitChangePassword()">Запази</button></div>
+  `);
+};
+
+window.submitChangePassword = async function() {
+  const oldP = document.getElementById('cp-old').value;
+  const newP = document.getElementById('cp-new').value;
+  const newP2 = document.getElementById('cp-new2').value;
+  const msg = document.getElementById('cp-msg');
+  msg.style.display = 'none';
+  if (newP.length < 4) { msg.textContent = 'Новата парола трябва да е поне 4 символа'; msg.style.display = 'block'; return; }
+  if (newP !== newP2) { msg.textContent = 'Двете нови пароли не съвпадат'; msg.style.display = 'block'; return; }
+  const r = await fetch('/api/me/change-password', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({old_password: oldP, new_password: newP})});
+  const d = await r.json();
+  if (d.error === 'wrong_old_password') { msg.textContent = 'Грешна текуща парола'; msg.style.display = 'block'; return; }
+  if (d.ok) {
+    closeModal();
+    setTimeout(() => alert('Паролата е сменена успешно.'), 200);
+  } else {
+    msg.textContent = 'Възникна грешка'; msg.style.display = 'block';
+  }
+};
 
 function openTaskModal(){
   const whoOptions = `<option value="${USER_ID}" selected>Себе си</option>` + USERS.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join('');

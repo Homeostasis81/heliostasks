@@ -500,6 +500,22 @@ async def reset_password(request: Request, uid: int):
     log_action(user["id"], "user", uid, "reset_password")
     return JSONResponse({"ok": True, "new_password": new_pass})
 
+@app.post("/api/me/change-password")
+async def change_my_password(request: Request):
+    """Allow any logged-in user to change their own password by providing old + new."""
+    user = current_user(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    data = await request.json()
+    old_pass = data.get("old_password","")
+    new_pass = data.get("new_password","").strip()
+    if len(new_pass) < 4: return JSONResponse({"error": "password_too_short"}, 400)
+    if not verify_password(old_pass, user["password"]):
+        return JSONResponse({"error": "wrong_old_password"}, 403)
+    with get_db() as db:
+        db.execute("UPDATE users SET password=? WHERE id=?", (hash_password(new_pass), user["id"]))
+    log_action(user["id"], "user", user["id"], "self_change_password")
+    return JSONResponse({"ok": True})
+
 @app.get("/api/visibility/{manager_id}")
 async def get_visibility(request: Request, manager_id: int):
     user = current_user(request)
