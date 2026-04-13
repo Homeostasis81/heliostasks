@@ -374,24 +374,46 @@ body::before{content:'';position:absolute;top:-50%;right:-50%;width:100%;height:
         <div class="brand-sub">Task management</div>
     </div>
     <div class="card">
-        <div class="card-title">Добре дошъл</div>
-        <div class="card-sub">Влез в системата за управление на задачи</div>
+        <div class="card-title" id="welcome-text">Добре дошъл</div>
+        <div class="card-sub" id="subtitle-text">Влез в системата за управление на задачи</div>
         <form method="POST" action="/login">
             <div class="field">
-                <label>Потребител</label>
-                <input type="text" name="username" placeholder="Потребителско име" required autofocus>
+                <label id="user-label">Потребител</label>
+                <input type="text" name="username" id="user-input" placeholder="Потребителско име" required autofocus>
             </div>
             <div class="field">
-                <label>Парола</label>
-                <input type="password" name="password" placeholder="Парола" required>
+                <label id="pass-label">Парола</label>
+                <input type="password" name="password" id="pass-input" placeholder="Парола" required>
             </div>
-            <button type="submit" class="btn-login">Вход</button>
+            <button type="submit" class="btn-login" id="login-btn">Вход</button>
         </form>
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}
     </div>
+    <div style="text-align:center;margin-top:14px"><button onclick="toggleLang()" id="lang-toggle" style="background:none;border:1px solid rgba(198,163,80,.2);color:rgba(198,163,80,.7);padding:6px 14px;border-radius:8px;font-size:11px;font-weight:600;letter-spacing:.5px;cursor:pointer;font-family:inherit">EN</button></div>
 </div>
+<script>
+const TXT = {
+  bg: {welcome:'Добре дошъл', subtitle:'Влез в системата за управление на задачи', user:'Потребител', userPh:'Потребителско име', pass:'Парола', passPh:'Парола', btn:'Вход', toggle:'EN'},
+  en: {welcome:'Welcome', subtitle:'Sign in to the task management system', user:'Username', userPh:'Username', pass:'Password', passPh:'Password', btn:'Sign in', toggle:'BG'}
+};
+let lang = localStorage.getItem('helios_lang') || 'bg';
+function applyLang() {
+  const x = TXT[lang];
+  document.getElementById('welcome-text').textContent = x.welcome;
+  document.getElementById('subtitle-text').textContent = x.subtitle;
+  document.getElementById('user-label').textContent = x.user;
+  document.getElementById('user-input').placeholder = x.userPh;
+  document.getElementById('pass-label').textContent = x.pass;
+  document.getElementById('pass-input').placeholder = x.passPh;
+  document.getElementById('login-btn').textContent = x.btn;
+  document.getElementById('lang-toggle').textContent = x.toggle;
+  document.documentElement.lang = lang;
+}
+function toggleLang() { lang = lang === 'bg' ? 'en' : 'bg'; localStorage.setItem('helios_lang', lang); applyLang(); }
+applyLang();
+</script>
 </body>
 </html>
 '''
@@ -416,6 +438,7 @@ APP = r'''<!DOCTYPE html>
       <span class="logo-label">Tasks</span>
     </div>
     <div class="user-info">
+      <button id="lang-btn" class="notif-btn" title="Language" onclick="setLanguage(LANG==='bg'?'en':'bg')" style="font-size:11px;font-weight:600;letter-spacing:.5px;min-width:32px">EN</button>
       <button id="notif-btn" class="notif-btn" title="Известия">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         <span id="notif-badge" class="notif-badge" style="display:none">0</span>
@@ -435,7 +458,7 @@ APP = r'''<!DOCTYPE html>
     <button class="nav-btn active" data-view="kanban">Kanban</button>
     <button class="nav-btn" data-view="list">Списък</button>
     <button class="nav-btn" data-view="calendar">Календар</button>
-    <button class="nav-btn" data-view="projects">Проекти</button>
+    <button class="nav-btn" data-view="projects">${t('projects_admin')}</button>
     <button class="nav-btn" data-view="reports">{% if is_ceo or is_manager %}Отчети{% else %}Дневен отчет{% endif %}</button>
     {% if is_ceo %}<button class="nav-btn" data-view="dashboard">Dashboard</button>{% endif %}
     {% if is_ceo %}<button class="nav-btn" data-view="admin">Админ</button>{% endif %}
@@ -478,11 +501,228 @@ const USER_ROLE = "{{ user_role }}";
 const USER_ID = {{ user.id }};
 const USERS = {{ users | tojson }};
 const PROJECTS = {{ projects | tojson }};
-const PL = {critical:'Критичен',high:'Висок',medium:'Среден',low:'Нисък'};
-const SL = {todo:'Нови',progress:'В работа',review:'За преглед',done:'Готови'};
+
+// === I18N ===
+const I18N = {
+  bg: {
+    // Roles
+    role_ceo: 'CEO', role_manager: 'Мениджър', role_employee: 'Служител',
+    // Nav
+    nav_kanban: 'Kanban', nav_list: 'Списък', nav_calendar: 'Календар',
+    nav_projects: '${t('projects_admin')}', nav_reports_full: 'Отчети', nav_reports_self: 'Дневен отчет',
+    nav_dashboard: 'Dashboard', nav_admin: 'Админ',
+    // Priority/Status
+    pri_critical: 'Критичен', pri_high: 'Висок', pri_medium: 'Среден', pri_low: 'Нисък',
+    st_todo: 'Нови', st_progress: 'В работа', st_review: 'За преглед', st_done: 'Готови',
+    // Filters
+    f_all: '${t('f_all')}',
+    // Modals
+    new_task: t('new_task'), edit_task: t('edit'),
+    title: 'Заглавие', description: 'Описание', project: 'Проект', priority: 'Приоритет',
+    status: 'Статус', assignee: 'Отговорник', due_date: 'Краен срок', myself: 'Себе си',
+    new_project: t('new_project'), name: 'Име', color: 'Цвят',
+    new_employee: t('new_employee'), edit: t('edit'),
+    name_cyrillic: '${t('name_cyrillic')}', username_latin: '${t('username_latin')}',
+    password: 'Парола', new_password_blank: '${t('new_password_blank')}',
+    new_password_placeholder: '${t('new_password_placeholder')}', role: 'Роля',
+    forgot_password: '${t('forgot_password')}', generate_new_password: '${t('generate_new_password')}',
+    sure_reset_password: 'Сигурен ли си, че искаш да генерираш нова парола за',
+    old_password_will_not_work: 'Старата парола вече няма да работи.',
+    new_password_generated: t('new_password_generated'),
+    give_password_to: 'Дай тази парола на', not_shown_again: 'Тя няма да бъде показана отново.',
+    suggest_change_first_login: '${t('suggest_change_first_login')}',
+    change_password: t('change_password'), current_password: 'Текуща парола',
+    new_password: 'Нова парола', repeat_new_password: 'Повтори новата парола',
+    pass_min_4: '${t('pass_min_4')}', pass_too_short: 'Новата парола трябва да е поне 4 символа',
+    pass_no_match: 'Двете нови пароли не съвпадат', wrong_old_pass: 'Грешна текуща парола',
+    pass_changed: 'Паролата е сменена успешно.', error_occurred: 'Възникна грешка',
+    visibility_for: 'Видимост на отчети —', visibility_help: '${t('visibility_help')}',
+    no_employees: '${t('no_employees')}',
+    // Buttons
+    cancel: 'Откажи', save: 'Запази', add: 'Добави', delete: 'Изтрий',
+    create: 'Създай', sure: 'Сигурен ли си?', close: 'Затвори',
+    download: 'Свали', visibility: 'Видимост', open_history: 'История на промените',
+    no_history: '${t('no_history')}',
+    // Reports
+    fill_daily_report: '${t('fill_daily_report')}', select_task: '${t('select_task')}',
+    what_did_you_do: '${t('what_did_you_do')}', more_row: '${t('more_row')}',
+    notes_problems: '${t('notes_problems')}', something_important: '${t('something_important')}',
+    submit_report: '${t('submit_report')}', no_reports_yet: '${t('no_reports_yet')}',
+    add_at_least_one: 'Добави поне един ред',
+    hours_total: 'ч общо', hours_short: 'ч', tasks: 'задачи', done_count: 'готови',
+    in_progress_count: 'в работа', overdue_count: 'просрочени',
+    // Projects
+    new_project_btn: '${t('new_project_btn')}', no_tasks_in_project: '${t('no_tasks_in_project')}',
+    add_task_btn: '${t('add_task_btn')}', new_task_btn: '${t('new_task_btn')}',
+    tasks_total: 'задачи общо', percent_done: '% завършен',
+    // Admin
+    employees: '${t('employees')}', projects_admin: '${t('projects_admin')}', new_employee_btn: '${t('new_employee_btn')}',
+    backups: '${t('backups')}', create_backup_now: '${t('create_backup_now')}',
+    no_backups_yet: '${t('no_backups_yet')}',
+    showing_backups: 'Показани 10 от', backups_count: 'бекъпа',
+    delete_user_warn: 'Задачите му ще останат без отговорник.',
+    delete_project_warn: 'Изтриване на проект',
+    username_taken: 'Потребителското име вече съществува!',
+    fill_name_username: 'Попълни име и потребителско име',
+    delete_employee: 'Изтриване на',
+    // Dashboard
+    total: 'Общо', done: 'Готови', overdue: 'Просрочени', critical: 'Критични',
+    team: 'Екип', has_report: 'днес', no_report: 'Няма отчет',
+    employee_workload: 'натовареност', team_member_tasks: 'задачи /',
+    // Notifications
+    notifications: 'Известия', overdue_tasks: 'Просрочени задачи',
+    due_today: 'Срок днес', active_tasks: 'Активни задачи',
+    no_report_today: 'Не си попълнил отчет днес', team_no_report: 'Без отчет днес',
+    all_under_control: 'Всичко е под контрол',
+    // Calendar
+    legend_holiday: 'Празник', legend_weekend: 'Уикенд', legend_today: 'Днес',
+    months: ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'],
+    days: ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'],
+    // Holiday names
+    h_new_year: t('h_new_year'), h_liberation: t('h_liberation'), h_labour: t('h_labour'),
+    h_george: t('h_george'), h_letters: t('h_letters'), h_unification: t('h_unification'),
+    h_independence: t('h_independence'), h_enlighteners: t('h_enlighteners'),
+    h_christmas_eve: t('h_christmas_eve'), h_christmas: t('h_christmas'),
+    h_good_friday: t('h_good_friday'), h_holy_saturday: t('h_holy_saturday'),
+    h_easter: t('h_easter'), h_easter_monday: t('h_easter_monday'),
+    // Audit log actions
+    a_created: 'Създадена', a_updated: 'Промяна', a_deleted: 'Изтрита',
+    a_reset_password: 'Парола сменена',
+    f_title: 'заглавие', f_description: 'описание', f_priority: 'приоритет',
+    f_status: 'статус', f_assignee_id: 'отговорник', f_project_id: 'проект',
+    f_due_date: 'срок',
+    // Login + topbar
+    welcome: 'Добре дошъл', logout: 'Изход',
+    notif_title: 'Известия',
+  },
+  en: {
+    role_ceo: 'CEO', role_manager: 'Manager', role_employee: 'Employee',
+    nav_kanban: 'Kanban', nav_list: 'List', nav_calendar: 'Calendar',
+    nav_projects: 'Projects', nav_reports_full: 'Reports', nav_reports_self: 'Daily report',
+    nav_dashboard: 'Dashboard', nav_admin: 'Admin',
+    pri_critical: 'Critical', pri_high: 'High', pri_medium: 'Medium', pri_low: 'Low',
+    st_todo: 'To do', st_progress: 'In progress', st_review: 'Review', st_done: 'Done',
+    f_all: 'All',
+    new_task: 'New task', edit_task: 'Edit task',
+    title: 'Title', description: 'Description', project: 'Project', priority: 'Priority',
+    status: 'Status', assignee: 'Assignee', due_date: 'Due date', myself: 'Myself',
+    new_project: 'New project', name: 'Name', color: 'Color',
+    new_employee: 'New employee', edit: 'Edit',
+    name_cyrillic: 'Display name', username_latin: 'Username',
+    password: 'Password', new_password_blank: 'New password (blank = no change)',
+    new_password_placeholder: 'New password...', role: 'Role',
+    forgot_password: 'Forgot password?', generate_new_password: 'Generate new password',
+    sure_reset_password: 'Are you sure you want to reset password for',
+    old_password_will_not_work: 'The old password will no longer work.',
+    new_password_generated: 'New password generated',
+    give_password_to: 'Give this password to', not_shown_again: 'It will not be shown again.',
+    suggest_change_first_login: 'Tip: ask the user to change it on first login.',
+    change_password: 'Change password', current_password: 'Current password',
+    new_password: 'New password', repeat_new_password: 'Repeat new password',
+    pass_min_4: 'At least 4 characters', pass_too_short: 'New password must be at least 4 characters',
+    pass_no_match: 'New passwords do not match', wrong_old_pass: 'Wrong current password',
+    pass_changed: 'Password changed successfully.', error_occurred: 'An error occurred',
+    visibility_for: 'Report visibility —', visibility_help: 'Select whose reports this manager can see:',
+    no_employees: 'No employees',
+    cancel: 'Cancel', save: 'Save', add: 'Add', delete: 'Delete',
+    create: 'Create', sure: 'Are you sure?', close: 'Close',
+    download: 'Download', visibility: 'Visibility', open_history: 'Change history',
+    no_history: 'No history',
+    fill_daily_report: 'Fill daily report', select_task: '— Select task —',
+    what_did_you_do: 'What did you do...', more_row: '+ Add row',
+    notes_problems: 'Notes / issues', something_important: 'Anything important...',
+    submit_report: 'Submit report', no_reports_yet: 'No reports yet',
+    add_at_least_one: 'Add at least one row',
+    hours_total: 'h total', hours_short: 'h', tasks: 'tasks', done_count: 'done',
+    in_progress_count: 'in progress', overdue_count: 'overdue',
+    new_project_btn: '+ New project', no_tasks_in_project: 'No tasks in this project.',
+    add_task_btn: '+ Add task', new_task_btn: '+ New task',
+    tasks_total: 'total tasks', percent_done: '% done',
+    employees: 'Employees', projects_admin: 'Projects', new_employee_btn: '+ New employee',
+    backups: 'Database backups', create_backup_now: 'Create backup now',
+    no_backups_yet: 'No backups yet. The system creates daily backups automatically.',
+    showing_backups: 'Showing 10 of', backups_count: 'backups',
+    delete_user_warn: 'Their tasks will remain without an assignee.',
+    delete_project_warn: 'Delete project',
+    username_taken: 'Username already exists!',
+    fill_name_username: 'Fill in name and username',
+    delete_employee: 'Delete',
+    total: 'Total', done: 'Done', overdue: 'Overdue', critical: 'Critical',
+    team: 'Team', has_report: 'today', no_report: 'No report',
+    employee_workload: 'workload', team_member_tasks: 'tasks /',
+    notifications: 'Notifications', overdue_tasks: 'Overdue tasks',
+    due_today: 'Due today', active_tasks: 'Active tasks',
+    no_report_today: 'You have not filled a report today', team_no_report: 'No report today',
+    all_under_control: 'All under control',
+    legend_holiday: 'Holiday', legend_weekend: 'Weekend', legend_today: 'Today',
+    months: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    h_new_year: 'New Year', h_liberation: 'Liberation Day', h_labour: 'Labour Day',
+    h_george: "St. George's Day", h_letters: 'Cyrillic Alphabet Day', h_unification: 'Unification',
+    h_independence: 'Independence Day', h_enlighteners: 'Enlighteners Day',
+    h_christmas_eve: 'Christmas Eve', h_christmas: 'Christmas',
+    h_good_friday: 'Good Friday', h_holy_saturday: 'Holy Saturday',
+    h_easter: 'Easter', h_easter_monday: 'Easter Monday',
+    a_created: 'Created', a_updated: 'Updated', a_deleted: 'Deleted',
+    a_reset_password: 'Password reset',
+    f_title: 'title', f_description: 'description', f_priority: 'priority',
+    f_status: 'status', f_assignee_id: 'assignee', f_project_id: 'project',
+    f_due_date: 'due date',
+    welcome: 'Welcome', logout: 'Logout',
+    notif_title: 'Notifications',
+  }
+};
+
+let LANG = localStorage.getItem('helios_lang') || 'bg';
+let T = I18N[LANG];
+
+function t(key) { return T[key] || key; }
+
+function setLanguage(lang) {
+  if (!I18N[lang]) return;
+  LANG = lang;
+  T = I18N[lang];
+  MONTHS = T.months;
+  DAYS = T.days;
+  localStorage.setItem('helios_lang', lang);
+  applyStaticTranslations();
+  switchView(curView);
+  loadNotifications();
+}
+
+function applyStaticTranslations() {
+  // Topbar role badge
+  const roleBadge = document.querySelector('.user-badge');
+  if (roleBadge) roleBadge.textContent = USER_ROLE === 'ceo' ? t('role_ceo') : USER_ROLE === 'manager' ? t('role_manager') : t('role_employee');
+  // Nav buttons
+  const navMap = {kanban: 'nav_kanban', list: 'nav_list', calendar: 'nav_calendar', projects: 'nav_projects', dashboard: 'nav_dashboard', admin: 'nav_admin'};
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    const v = btn.dataset.view;
+    if (navMap[v]) btn.textContent = t(navMap[v]);
+    if (v === 'reports') btn.textContent = (IS_CEO || IS_MANAGER) ? t('nav_reports_full') : t('nav_reports_self');
+  });
+  // Notifications header
+  const notifHeader = document.querySelector('.notif-header');
+  if (notifHeader) notifHeader.textContent = t('notif_title');
+  // Tooltips
+  const fab = document.getElementById('fab-add');
+  if (fab) fab.title = t('new_task');
+  const passBtn = document.getElementById('pass-btn');
+  if (passBtn) passBtn.title = t('change_password');
+  const notifBtn = document.getElementById('notif-btn');
+  if (notifBtn) notifBtn.title = t('notifications');
+  // Lang button label
+  const langBtn = document.getElementById('lang-btn');
+  if (langBtn) langBtn.textContent = LANG === 'bg' ? 'EN' : 'BG';
+  document.documentElement.lang = LANG;
+}
+
+// Legacy aliases - many existing functions reference these
+const PL = new Proxy({}, {get(_, k) { return t('pri_' + k); }});
+const SL = new Proxy({}, {get(_, k) { return t('st_' + k); }});
 const SC = {todo:'#8b949e',progress:'#58a6ff',review:'#d29922',done:'#3fb950'};
-const MONTHS = ['Януари','Февруари','Март','Април','Май','Юни','Юли','Август','Септември','Октомври','Ноември','Декември'];
-const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+let MONTHS = T.months;
+let DAYS = T.days;
 
 let allTasks = [];
 let curView = 'kanban';
@@ -513,6 +753,7 @@ document.addEventListener('click', e => {
     popup.classList.remove('show');
   }
 });
+applyStaticTranslations();
 loadTasks();
 loadNotifications();
 setInterval(loadNotifications, 60000);
@@ -533,7 +774,7 @@ async function loadNotifications() {
         <div class="notif-icon" style="background:rgba(248,81,73,.15);color:#f85149">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
-        <div class="notif-content"><span>Просрочени задачи</span><span class="notif-count" style="color:#f85149">${n.overdue}</span></div>
+        <div class="notif-content"><span>${t('overdue_tasks')}</span><span class="notif-count" style="color:#f85149">${n.overdue}</span></div>
       </div>`;
     }
     if (n.today > 0) {
@@ -541,7 +782,7 @@ async function loadNotifications() {
         <div class="notif-icon" style="background:rgba(210,153,34,.15);color:#d29922">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         </div>
-        <div class="notif-content"><span>Срок днес</span><span class="notif-count" style="color:#d29922">${n.today}</span></div>
+        <div class="notif-content"><span>${t('due_today')}</span><span class="notif-count" style="color:#d29922">${n.today}</span></div>
       </div>`;
     }
     if (n.active > 0) {
@@ -549,7 +790,7 @@ async function loadNotifications() {
         <div class="notif-icon" style="background:rgba(88,166,255,.15);color:#58a6ff">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
         </div>
-        <div class="notif-content"><span>Активни задачи</span><span class="notif-count">${n.active}</span></div>
+        <div class="notif-content"><span>${t('active_tasks')}</span><span class="notif-count">${n.active}</span></div>
       </div>`;
     }
     if (USER_ROLE === 'employee' && !n.has_report_today) {
@@ -557,7 +798,7 @@ async function loadNotifications() {
         <div class="notif-icon" style="background:rgba(198,163,80,.15);color:#c6a350">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         </div>
-        <div class="notif-content"><span style="color:#c6a350">Не си попълнил отчет днес</span></div>
+        <div class="notif-content"><span style="color:#c6a350">${t('no_report_today')}</span></div>
       </div>`;
     }
     if ((USER_ROLE === 'ceo' || USER_ROLE === 'manager') && n.team_no_report > 0) {
@@ -565,10 +806,10 @@ async function loadNotifications() {
         <div class="notif-icon" style="background:rgba(198,163,80,.15);color:#c6a350">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
         </div>
-        <div class="notif-content"><span>Без отчет днес</span><span class="notif-count" style="color:#c6a350">${n.team_no_report}</span></div>
+        <div class="notif-content"><span>${t('team_no_report')}</span><span class="notif-count" style="color:#c6a350">${n.team_no_report}</span></div>
       </div>`;
     }
-    if (!html) html = '<div class="notif-empty">Всичко е под контрол</div>';
+    if (!html) html = `<div class="notif-empty">${t('all_under_control')}</div>`;
     list.innerHTML = html;
   } catch(e) { console.error(e); }
 }
@@ -616,7 +857,7 @@ function renderKanban() {
   let tasks = allTasks;
   if (kFilter !== 'all') tasks = tasks.filter(t => t.priority === kFilter);
   let html = `<div class="filters">${['all','critical','high','medium','low'].map(f =>
-    `<button class="fbtn ${kFilter===f?'active':''}" onclick="kFilter='${f}';renderKanban()">${f==='all'?'Всички':PL[f]}</button>`
+    `<button class="fbtn ${kFilter===f?'active':''}" onclick="kFilter='${f}';renderKanban()">${f==='all'?'${t('f_all')}':PL[f]}</button>`
   ).join('')}</div><div class="kanban">`;
   ['todo','progress','review','done'].forEach(s => {
     const ft = tasks.filter(t => t.status === s);
@@ -631,8 +872,8 @@ function renderKanban() {
 function renderList() {
   const sorted = [...allTasks].sort((a,b) => ({critical:0,high:1,medium:2,low:3})[a.priority] - ({critical:0,high:1,medium:2,low:3})[b.priority]);
   let html = `<div class="table-wrap"><table class="ltbl"><thead><tr>
-    <th>Задача</th><th class="hide-mobile">Проект</th><th>Приоритет</th>
-    <th class="hide-mobile">Отговорник</th><th class="hide-mobile">Срок</th><th>Статус</th></tr></thead><tbody>`;
+    <th>Задача</th><th class="hide-mobile">${t('project')}</th><th>${t('priority')}</th>
+    <th class="hide-mobile">${t('assignee')}</th><th class="hide-mobile">Срок</th><th>${t('status')}</th></tr></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr onclick="openEditTask(${t.id})" style="cursor:pointer">
       <td class="td-title">${t.title}</td>
@@ -667,17 +908,17 @@ function orthodoxEaster(year) {
 function getBulgarianHolidays(year) {
   // Fixed holidays
   const holidays = {
-    [`${year}-01-01`]: 'Нова година',
-    [`${year}-03-03`]: 'Освобождение',
-    [`${year}-05-01`]: 'Ден на труда',
-    [`${year}-05-06`]: 'Гергьовден',
-    [`${year}-05-24`]: 'Ден на буквите',
-    [`${year}-09-06`]: 'Съединение',
-    [`${year}-09-22`]: 'Независимост',
-    [`${year}-11-01`]: 'Народни будители',
-    [`${year}-12-24`]: 'Бъдни вечер',
-    [`${year}-12-25`]: 'Рождество',
-    [`${year}-12-26`]: 'Рождество',
+    [`${year}-01-01`]: t('h_new_year'),
+    [`${year}-03-03`]: t('h_liberation'),
+    [`${year}-05-01`]: t('h_labour'),
+    [`${year}-05-06`]: t('h_george'),
+    [`${year}-05-24`]: t('h_letters'),
+    [`${year}-09-06`]: t('h_unification'),
+    [`${year}-09-22`]: t('h_independence'),
+    [`${year}-11-01`]: t('h_enlighteners'),
+    [`${year}-12-24`]: t('h_christmas_eve'),
+    [`${year}-12-25`]: t('h_christmas'),
+    [`${year}-12-26`]: t('h_christmas'),
   };
   // Easter-based holidays
   const easter = orthodoxEaster(year);
@@ -685,10 +926,10 @@ function getBulgarianHolidays(year) {
   const holySaturday = new Date(easter); holySaturday.setDate(easter.getDate() - 1);
   const easterMonday = new Date(easter); easterMonday.setDate(easter.getDate() + 1);
   const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  holidays[fmt(goodFriday)] = 'Разпети петък';
-  holidays[fmt(holySaturday)] = 'Велика събота';
-  holidays[fmt(easter)] = 'Великден';
-  holidays[fmt(easterMonday)] = 'Велики понеделник';
+  holidays[fmt(goodFriday)] = t('h_good_friday');
+  holidays[fmt(holySaturday)] = t('h_holy_saturday');
+  holidays[fmt(easter)] = t('h_easter');
+  holidays[fmt(easterMonday)] = t('h_easter_monday');
   return holidays;
 }
 
@@ -730,9 +971,9 @@ function renderCalendar(data) {
   html+=`</div></div>`;
   // Legend
   html+=`<div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:#8b949e;flex-wrap:wrap">
-    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.2)"></span>Празник</span>
-    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(139,148,158,.12)"></span>Уикенд</span>
-    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(198,163,80,.08)"></span>Днес</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.2)"></span>${t('legend_holiday')}</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(139,148,158,.12)"></span>${t('legend_weekend')}</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(198,163,80,.08)"></span>${t('legend_today')}</span>
   </div>`;
   document.getElementById('v-calendar').innerHTML=html;
 }
@@ -757,17 +998,17 @@ async function loadProjects(){
       <span class="proj-dot" style="background:${p.color}"></span><span class="proj-name">${p.name}</span></div>
       <span class="proj-pct">${pct}%</span></div>
       <div class="proj-bar"><div class="proj-fill" style="width:${pct}%;background:${p.color}"></div></div>
-      <div class="proj-stats"><span>${p.total_tasks} задачи</span><span style="color:#3fb950">${p.done_tasks} готови</span></div></div>`;
+      <div class="proj-stats"><span>${p.total_tasks} ${t('tasks')}</span><span style="color:#3fb950">${p.done_tasks} ${t('done_count')}</span></div></div>`;
   });
-  html+=`<button class="btn-outline" onclick="openProjectModal()" style="margin-top:8px">+ Нов проект</button>`;
+  html+=`<button class="btn-outline" onclick="openProjectModal()" style="margin-top:8px">${t('new_project_btn')}</button>`;
   document.getElementById('v-projects').innerHTML=html;
 }
 
 window.showProjectTasks=function(pid, pname, pcolor){
   const projTasks = allTasks.filter(t => t.project_id === pid);
   if(!projTasks.length){
-    openModal(pname, `<div style="color:#8b949e;font-size:13px;padding:10px 0">Няма задачи в този проект.</div>
-      <div class="modal-actions"><button class="btn-primary" onclick="closeModal();openTaskModal();setTimeout(()=>{const s=document.getElementById('nt-proj');if(s)s.value='${pid}';},50)">+ Добави задача</button></div>`);
+    openModal(pname, `<div style="color:#8b949e;font-size:13px;padding:10px 0">${t('no_tasks_in_project')}</div>
+      <div class="modal-actions"><button class="btn-primary" onclick="closeModal();openTaskModal();setTimeout(()=>{const s=document.getElementById('nt-proj');if(s)s.value='${pid}';},50)">${t('add_task_btn')}</button></div>`);
     return;
   }
   // Group by status
@@ -775,7 +1016,7 @@ window.showProjectTasks=function(pid, pname, pcolor){
   projTasks.forEach(t => groups[t.status].push(t));
   let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #30363d">
     <span class="proj-dot" style="background:${pcolor}"></span>
-    <span style="font-size:12px;color:#8b949e">${projTasks.length} задачи общо</span></div>`;
+    <span style="font-size:12px;color:#8b949e">${projTasks.length} ${t('tasks_total')}</span></div>`;
   ['todo','progress','review','done'].forEach(st => {
     if(!groups[st].length) return;
     html += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#8b949e;font-weight:600;margin:12px 0 6px;display:flex;align-items:center;gap:6px"><span class="sdot" style="background:${SC[st]}"></span>${SL[st]} (${groups[st].length})</div>`;
@@ -794,8 +1035,8 @@ window.showProjectTasks=function(pid, pname, pcolor){
     });
   });
   html += `<div class="modal-actions" style="margin-top:16px;border-top:1px solid #30363d;padding-top:12px">
-    <button class="btn-outline" onclick="closeModal()">Затвори</button>
-    <button class="btn-primary" onclick="closeModal();openTaskModal();setTimeout(()=>{const s=document.getElementById('nt-proj');if(s)s.value='${pid}';},50)">+ Нова задача</button></div>`;
+    <button class="btn-outline" onclick="closeModal()">${t('close')}</button>
+    <button class="btn-primary" onclick="closeModal();openTaskModal();setTimeout(()=>{const s=document.getElementById('nt-proj');if(s)s.value='${pid}';},50)">${t('new_task_btn')}</button></div>`;
   openModal(pname, html);
 };
 
@@ -803,20 +1044,20 @@ async function loadReports(){
   const el=document.getElementById('v-reports'); let html='';
   if(!IS_CEO){
     const myTasks=allTasks.filter(t=>t.assignee_id===USER_ID && t.status!=='done');
-    html+=`<div class="rpt-form"><div class="rpt-form-title">Попълни дневен отчет</div>
+    html+=`<div class="rpt-form"><div class="rpt-form-title">${t('fill_daily_report')}</div>
       <div id="rpt-items"><div class="rpt-item-row"><div class="rpt-item-fields">
-        <select class="rpt-task-sel"><option value="">— Избери задача —</option>${myTasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>
-        <div class="rpt-row-inner"><input type="text" class="rpt-desc" placeholder="Какво направи...">
+        <select class="rpt-task-sel"><option value="">${t('select_task')}</option>${myTasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>
+        <div class="rpt-row-inner"><input type="text" class="rpt-desc" placeholder="${t('what_did_you_do')}">
         <input type="number" class="rpt-hrs" value="4" min="0" max="16" step="0.5" style="width:70px">
         <span style="font-size:12px;color:#8b949e">ч</span></div></div></div></div>
-      <button class="btn-outline btn-sm" onclick="addReportItem()" style="margin-bottom:8px">+ Още ред</button>
-      <div class="rpt-label">Бележки / проблеми</div>
-      <input type="text" id="rpt-note" placeholder="Нещо важно..." class="rpt-input">
-      <button class="btn-primary" onclick="submitReport()" style="margin-top:12px;width:100%">Изпрати отчет</button></div>`;
+      <button class="btn-outline btn-sm" onclick="addReportItem()" style="margin-bottom:8px">${t('more_row')}</button>
+      <div class="rpt-label">${t('notes_problems')}</div>
+      <input type="text" id="rpt-note" placeholder="${t('something_important')}" class="rpt-input">
+      <button class="btn-primary" onclick="submitReport()" style="margin-top:12px;width:100%">${t('submit_report')}</button></div>`;
   }
   if(IS_CEO || IS_MANAGER){
     html+=`<div class="filters" id="rpt-filters">
-      <button class="fbtn active" onclick="filterReports(null,this)">Всички</button>
+      <button class="fbtn active" onclick="filterReports(null,this)">${t('f_all')}</button>
       ${USERS.map(u=>`<button class="fbtn" onclick="filterReports(${u.id},this)">${u.display_name}</button>`).join('')}</div>`;
   }
   html+=`<div id="rpt-list"></div>`;
@@ -834,13 +1075,13 @@ function renderReportList(reports){
       const totalH=r.items.reduce((s,i)=>s+i.hours,0);
       html+=`<div class="rpt-card" data-uid="${r.user_id}"><div class="rpt-head">
         <div class="rpt-name"><span class="avatar-sm" style="background:${r.color}">${r.initials}</span>${r.display_name}</div>
-        <div class="rpt-hours-total">${totalH}ч</div></div>`;
-      r.items.forEach(it=>{html+=`<div class="rpt-line"><span class="rpt-check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></span><span class="rpt-line-text">${it.description}</span><span class="rpt-line-hrs">${it.hours}ч</span></div>`;});
+        <div class="rpt-hours-total">${totalH}${t('hours_short')}</div></div>`;
+      r.items.forEach(it=>{html+=`<div class="rpt-line"><span class="rpt-check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></span><span class="rpt-line-text">${it.description}</span><span class="rpt-line-hrs">${it.hours}${t('hours_short')}</span></div>`;});
       r.notes.forEach(n=>{html+=`<div class="rpt-note">${n.note}</div>`;});
       html+=`</div>`;
     });
   });
-  if(!reports.length) html=`<div class="empty-state">Все още няма отчети</div>`;
+  if(!reports.length) html=`<div class="empty-state">${t('no_reports_yet')}</div>`;
   document.getElementById('rpt-list').innerHTML=html;
 }
 window.filterReports=async function(uid,btn){
@@ -852,15 +1093,15 @@ window.filterReports=async function(uid,btn){
 window.addReportItem=function(){
   const myTasks=allTasks.filter(t=>t.assignee_id===USER_ID && t.status!=='done');
   const row=document.createElement('div'); row.className='rpt-item-row';
-  row.innerHTML=`<div class="rpt-item-fields"><select class="rpt-task-sel"><option value="">— Избери задача —</option>${myTasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>
-    <div class="rpt-row-inner"><input type="text" class="rpt-desc" placeholder="Какво направи..."><input type="number" class="rpt-hrs" value="2" min="0" max="16" step="0.5" style="width:70px"><span style="font-size:12px;color:#8b949e">ч</span></div></div>`;
+  row.innerHTML=`<div class="rpt-item-fields"><select class="rpt-task-sel"><option value="">${t('select_task')}</option>${myTasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>
+    <div class="rpt-row-inner"><input type="text" class="rpt-desc" placeholder="${t('what_did_you_do')}"><input type="number" class="rpt-hrs" value="2" min="0" max="16" step="0.5" style="width:70px"><span style="font-size:12px;color:#8b949e">ч</span></div></div>`;
   document.getElementById('rpt-items').appendChild(row);
 };
 window.submitReport=async function(){
   const rows=document.querySelectorAll('.rpt-item-row'); const items=[];
   rows.forEach(row=>{const desc=row.querySelector('.rpt-desc').value.trim();const hrs=parseFloat(row.querySelector('.rpt-hrs').value)||0;const tid=row.querySelector('.rpt-task-sel').value||null;
     if(desc) items.push({description:desc,hours:hrs,task_id:tid?parseInt(tid):null});});
-  if(!items.length){alert('Добави поне един ред');return;}
+  if(!items.length){alert(t('add_at_least_one'));return;}
   const note=document.getElementById('rpt-note').value.trim();
   await fetch('/api/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items,note,report_date:new Date().toISOString().split('T')[0]})});
   loadReports();
@@ -870,13 +1111,13 @@ async function loadDashboard(){
   const res=await fetch('/api/dashboard'); const d=await res.json();
   const el=document.getElementById('v-dashboard');
   let html=`<div class="stats-grid">
-    <div class="stat-card"><div class="stat-label">Общо</div><div class="stat-value">${d.total}</div></div>
-    <div class="stat-card"><div class="stat-label">Готови</div><div class="stat-value" style="color:#3fb950">${d.done}</div><div class="stat-sub">${d.total?Math.round(d.done/d.total*100):0}%</div></div>
-    <div class="stat-card"><div class="stat-label">Просрочени</div><div class="stat-value" style="color:#f85149">${d.overdue}</div></div>
-    <div class="stat-card"><div class="stat-label">Критични</div><div class="stat-value" style="color:#d29922">${d.critical}</div></div></div>
+    <div class="stat-card"><div class="stat-label">${t('total')}</div><div class="stat-value">${d.total}</div></div>
+    <div class="stat-card"><div class="stat-label">${t('done')}</div><div class="stat-value" style="color:#3fb950">${d.done}</div><div class="stat-sub">${d.total?Math.round(d.done/d.total*100):0}%</div></div>
+    <div class="stat-card"><div class="stat-label">${t('overdue')}</div><div class="stat-value" style="color:#f85149">${d.overdue}</div></div>
+    <div class="stat-card"><div class="stat-label">${t('critical')}</div><div class="stat-value" style="color:#d29922">${d.critical}</div></div></div>
   <div class="chart-legend">
     <span><i style="background:#8b949e"></i>Нови ${d.by_status.todo}</span><span><i style="background:#58a6ff"></i>В работа ${d.by_status.progress}</span>
-    <span><i style="background:#d29922"></i>За преглед ${d.by_status.review}</span><span><i style="background:#3fb950"></i>Готови ${d.by_status.done}</span></div>
+    <span><i style="background:#d29922"></i>${t('st_review')} ${d.by_status.review}</span><span><i style="background:#3fb950"></i>${t('st_done')} ${d.by_status.done}</span></div>
   <div class="chart-wrap"><canvas id="dChart"></canvas></div>
   <div class="sect-title">Екип</div><div class="team-grid">`;
   d.team.forEach(e=>{
@@ -890,7 +1131,7 @@ async function loadDashboard(){
   el.innerHTML=html;
   if(window._dc) window._dc.destroy();
   window._dc=new Chart(document.getElementById('dChart'),{type:'doughnut',
-    data:{labels:['Нови','В работа','За преглед','Готови'],datasets:[{data:[d.by_status.todo,d.by_status.progress,d.by_status.review,d.by_status.done],backgroundColor:['#8b949e','#58a6ff','#d29922','#3fb950'],borderWidth:0,borderColor:'#161b22'}]},
+    data:{labels:[t('st_todo'),t('st_progress'),t('st_review'),t('st_done')],datasets:[{data:[d.by_status.todo,d.by_status.progress,d.by_status.review,d.by_status.done],backgroundColor:['#8b949e','#58a6ff','#d29922','#3fb950'],borderWidth:0,borderColor:'#161b22'}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false}}}});
 }
 
@@ -899,15 +1140,15 @@ function openModal(title,bodyHtml){document.getElementById('modal-title').textCo
 function closeModal(){document.getElementById('modal-overlay').classList.remove('show');}
 
 window.openChangePasswordModal = function() {
-  openModal('Смяна на парола', `
-    <label>Текуща парола</label>
+  openModal(t('change_password'), `
+    <label>${t('current_password')}</label>
     <input type="password" id="cp-old" class="modal-input" autocomplete="current-password">
-    <label>Нова парола</label>
-    <input type="password" id="cp-new" class="modal-input" autocomplete="new-password" placeholder="Поне 4 символа">
-    <label>Повтори новата парола</label>
+    <label>${t('new_password')}</label>
+    <input type="password" id="cp-new" class="modal-input" autocomplete="new-password" placeholder="${t('pass_min_4')}">
+    <label>${t('repeat_new_password')}</label>
     <input type="password" id="cp-new2" class="modal-input" autocomplete="new-password">
     <div id="cp-msg" style="font-size:12px;color:#f85149;margin-top:8px;display:none"></div>
-    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="submitChangePassword()">Запази</button></div>
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="submitChangePassword()">${t('save')}</button></div>
   `);
 };
 
@@ -917,29 +1158,29 @@ window.submitChangePassword = async function() {
   const newP2 = document.getElementById('cp-new2').value;
   const msg = document.getElementById('cp-msg');
   msg.style.display = 'none';
-  if (newP.length < 4) { msg.textContent = 'Новата парола трябва да е поне 4 символа'; msg.style.display = 'block'; return; }
-  if (newP !== newP2) { msg.textContent = 'Двете нови пароли не съвпадат'; msg.style.display = 'block'; return; }
+  if (newP.length < 4) { msg.textContent = t('pass_too_short'); msg.style.display = 'block'; return; }
+  if (newP !== newP2) { msg.textContent = t('pass_no_match'); msg.style.display = 'block'; return; }
   const r = await fetch('/api/me/change-password', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({old_password: oldP, new_password: newP})});
   const d = await r.json();
-  if (d.error === 'wrong_old_password') { msg.textContent = 'Грешна текуща парола'; msg.style.display = 'block'; return; }
+  if (d.error === 'wrong_old_password') { msg.textContent = t('wrong_old_pass'); msg.style.display = 'block'; return; }
   if (d.ok) {
     closeModal();
-    setTimeout(() => alert('Паролата е сменена успешно.'), 200);
+    setTimeout(() => alert(t('pass_changed')), 200);
   } else {
-    msg.textContent = 'Възникна грешка'; msg.style.display = 'block';
+    msg.textContent = t('error_occurred'); msg.style.display = 'block';
   }
 };
 
 function openTaskModal(){
-  const whoOptions = `<option value="${USER_ID}" selected>Себе си</option>` + USERS.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join('');
-  openModal('Нова задача',`
-    <label>Заглавие</label><input type="text" id="nt-title" placeholder="Опиши задачата..." class="modal-input">
-    <label>Описание</label><textarea id="nt-desc" placeholder="Детайли..." class="modal-input" rows="2"></textarea>
-    <label>Проект</label><select id="nt-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
-    <label>Приоритет</label><select id="nt-pri" class="modal-input"><option value="critical">Критичен</option><option value="high">Висок</option><option value="medium" selected>Среден</option><option value="low">Нисък</option></select>
-    <label>Отговорник</label><select id="nt-who" class="modal-input">${whoOptions}</select>
-    <label>Краен срок</label><input type="date" id="nt-due" class="modal-input" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}">
-    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveNewTask()">Добави</button></div>`);
+  const whoOptions = `<option value="${USER_ID}" selected>${t('myself')}</option>` + USERS.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join('');
+  openModal(t('new_task'),`
+    <label>${t('title')}</label><input type="text" id="nt-title" placeholder="" class="modal-input">
+    <label>${t('description')}</label><textarea id="nt-desc" placeholder="" class="modal-input" rows="2"></textarea>
+    <label>${t('project')}</label><select id="nt-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
+    <label>${t('priority')}</label><select id="nt-pri" class="modal-input"><option value="critical">Критичен</option><option value="high">Висок</option><option value="medium" selected>Среден</option><option value="low">Нисък</option></select>
+    <label>${t('assignee')}</label><select id="nt-who" class="modal-input">${whoOptions}</select>
+    <label>${t('due_date')}</label><input type="date" id="nt-due" class="modal-input" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}">
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveNewTask()">${t('add')}</button></div>`);
 }
 window.saveNewTask=async function(){
   const title=document.getElementById('nt-title').value.trim(); if(!title) return;
@@ -952,16 +1193,16 @@ window.openEditTask=function(id){
   const canDelete = IS_CEO || IS_MANAGER;
   const whoOpts = USERS.map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${u.display_name}</option>`).join('');
   const meOpt = `<option value="${USER_ID}" ${USER_ID===t.assignee_id?'selected':''}>${USER_ID===t.assignee_id?'Себе си':'— Себе си —'}</option>`;
-  openModal('Редактиране',`
-    <label>Заглавие</label><input type="text" id="et-title" value="${t.title}" class="modal-input">
-    <label>Описание</label><textarea id="et-desc" class="modal-input" rows="2">${t.description||''}</textarea>
-    <label>Проект</label><select id="et-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}" ${p.id===t.project_id?'selected':''}>${p.name}</option>`).join('')}</select>
-    <label>Приоритет</label><select id="et-pri" class="modal-input">${Object.keys(PL).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PL[k]}</option>`).join('')}</select>
-    <label>Статус</label><select id="et-st" class="modal-input">${Object.keys(SL).map(k=>`<option value="${k}" ${k===t.status?'selected':''}>${SL[k]}</option>`).join('')}</select>
-    <label>Отговорник</label><select id="et-who" class="modal-input">${meOpt}${whoOpts}</select>
-    <label>Краен срок</label><input type="date" id="et-due" class="modal-input" value="${t.due_date||''}">
-    <div style="margin-top:14px"><button class="btn-outline btn-sm" onclick="showTaskHistory(${t.id})">История на промените</button><div id="audit-container"></div></div>
-    <div class="modal-actions">${canDelete?`<button class="btn-danger" onclick="deleteTask(${t.id})">Изтрий</button>`:''}<button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditTask(${t.id})">Запази</button></div>`);
+  openModal(t('edit'),`
+    <label>${t('title')}</label><input type="text" id="et-title" value="${t.title}" class="modal-input">
+    <label>${t('description')}</label><textarea id="et-desc" class="modal-input" rows="2">${t.description||''}</textarea>
+    <label>${t('project')}</label><select id="et-proj" class="modal-input">${PROJECTS.map(p=>`<option value="${p.id}" ${p.id===t.project_id?'selected':''}>${p.name}</option>`).join('')}</select>
+    <label>${t('priority')}</label><select id="et-pri" class="modal-input">${Object.keys(PL).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PL[k]}</option>`).join('')}</select>
+    <label>${t('status')}</label><select id="et-st" class="modal-input">${Object.keys(SL).map(k=>`<option value="${k}" ${k===t.status?'selected':''}>${SL[k]}</option>`).join('')}</select>
+    <label>${t('assignee')}</label><select id="et-who" class="modal-input">${meOpt}${whoOpts}</select>
+    <label>${t('due_date')}</label><input type="date" id="et-due" class="modal-input" value="${t.due_date||''}">
+    <div style="margin-top:14px"><button class="btn-outline btn-sm" onclick="showTaskHistory(${t.id})">${t('open_history')}</button><div id="audit-container"></div></div>
+    <div class="modal-actions">${canDelete?`<button class="btn-danger" onclick="deleteTask(${t.id})">${t('delete')}</button>`:''}<button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditTask(${t.id})">${t('save')}</button></div>`);
 };
 
 window.showTaskHistory = async function(tid) {
@@ -969,9 +1210,9 @@ window.showTaskHistory = async function(tid) {
   if (container.innerHTML) { container.innerHTML = ''; return; }
   const res = await fetch(`/api/audit/task/${tid}`);
   const log = await res.json();
-  if (!log.length) { container.innerHTML = '<div style="font-size:11px;color:#8b949e;padding:8px 0">Няма история</div>'; return; }
-  const actionLabels = {created:'Създадена', updated:'Промяна', deleted:'Изтрита', reset_password:'Парола сменена'};
-  const fieldLabels = {title:'заглавие', description:'описание', priority:'приоритет', status:'статус', assignee_id:'отговорник', project_id:'проект', due_date:'срок'};
+  if (!log.length) { container.innerHTML = '<div style="font-size:11px;color:#8b949e;padding:8px 0">${t('no_history')}</div>'; return; }
+  const actionLabels = {created:t('a_created'), updated:t('a_updated'), deleted:t('a_deleted'), reset_password:t('a_reset_password')};
+  const fieldLabels = {title:t('f_title'), description:t('f_description'), priority:t('f_priority'), status:t('f_status'), assignee_id:t('f_assignee_id'), project_id:t('f_project_id'), due_date:t('f_due_date')};
   let html = '<div class="audit-list">';
   log.forEach(e => {
     const dt = new Date(e.created_at);
@@ -997,38 +1238,38 @@ window.saveEditTask=async function(id){
   await fetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   closeModal(); await loadTasks(); switchView(curView);
 };
-window.deleteTask=async function(id){if(!confirm('Сигурен ли си?'))return;await fetch(`/api/tasks/${id}`,{method:'DELETE'});closeModal();await loadTasks();switchView(curView);};
-window.openProjectModal=function(){openModal('Нов проект',`<label>Име</label><input type="text" id="np-name" class="modal-input" placeholder="Име на проекта"><label>Цвят</label><input type="color" id="np-color" class="modal-input" value="#c6a350"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveProject()">Създай</button></div>`);};
+window.deleteTask=async function(id){if(!confirm(t('sure')))return;await fetch(`/api/tasks/${id}`,{method:'DELETE'});closeModal();await loadTasks();switchView(curView);};
+window.openProjectModal=function(){openModal(t('new_project'),`<label>${t('name')}</label><input type="text" id="np-name" class="modal-input" placeholder=""><label>${t('color')}</label><input type="color" id="np-color" class="modal-input" value="#c6a350"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveProject()">${t('create')}</button></div>`);};
 window.saveProject=async function(){const name=document.getElementById('np-name').value.trim();if(!name)return;await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,color:document.getElementById('np-color').value})});closeModal();location.reload();};
 
 // === ADMIN ===
 async function loadAdmin(){
   const[uRes,pRes,bRes]=await Promise.all([fetch('/api/users'),fetch('/api/projects/list'),fetch('/api/backups')]);
   const users=await uRes.json(),projs=await pRes.json(),backups=await bRes.json();
-  let html=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center"><span>Служители</span><button class="btn-outline btn-sm" onclick="openAddUser()">+ Нов служител</button></div>`;
+  let html=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center"><span>${t('employees')}</span><button class="btn-outline btn-sm" onclick="openAddUser()">${t('new_employee_btn')}</button></div>`;
   users.forEach(u=>{
-    const roleBadge = u.role==='manager' ? `<span style="font-size:10px;color:#c6a350;background:rgba(198,163,80,.15);padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px">Мениджър</span>` : '';
-    const visBtn = u.role==='manager' ? `<button class="btn-outline btn-sm" onclick="openVisibility(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">Видимост</button>` : '';
+    const roleBadge = u.role==='manager' ? `<span style="font-size:10px;color:#c6a350;background:rgba(198,163,80,.15);padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px">${t('role_manager')}</span>` : '';
+    const visBtn = u.role==='manager' ? `<button class="btn-outline btn-sm" onclick="openVisibility(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">${t('visibility')}</button>` : '';
     html+=`<div class="admin-card"><div class="admin-card-left"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><div><div class="admin-name">${u.display_name}${roleBadge}</div><div class="admin-sub">@${u.username}</div></div></div>
-      <div class="admin-card-actions">${visBtn}<button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}','${u.role}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
+      <div class="admin-card-actions">${visBtn}<button class="btn-outline btn-sm" onclick="openEditUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}','${u.username}','${u.color}','${u.role}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.display_name.replace(/'/g,"\\'")}')">${t('delete')}</button></div></div>`;
   });
-  html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>Проекти</span><button class="btn-outline btn-sm" onclick="openProjectModal()">+ Нов проект</button></div>`;
+  html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>${t('projects_admin')}</span><button class="btn-outline btn-sm" onclick="openProjectModal()">${t('new_project_btn')}</button></div>`;
   projs.forEach(p=>{
-    html+=`<div class="admin-card"><div class="admin-card-left"><span class="proj-dot" style="background:${p.color}"></span><div><div class="admin-name">${p.name}</div><div class="admin-sub">${p.total_tasks} задачи / ${p.done_tasks} готови</div></div></div>
-      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditProject(${p.id},'${p.name.replace(/'/g,"\\'")}','${p.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteProject(${p.id},'${p.name.replace(/'/g,"\\'")}')">Изтрий</button></div></div>`;
+    html+=`<div class="admin-card"><div class="admin-card-left"><span class="proj-dot" style="background:${p.color}"></span><div><div class="admin-name">${p.name}</div><div class="admin-sub">${p.total_tasks} ${t('tasks')} / ${p.done_tasks} ${t('done_count')}</div></div></div>
+      <div class="admin-card-actions"><button class="btn-outline btn-sm" onclick="openEditProject(${p.id},'${p.name.replace(/'/g,"\\'")}','${p.color}')">Редактирай</button><button class="btn-danger btn-sm" onclick="deleteProject(${p.id},'${p.name.replace(/'/g,"\\'")}')">${t('delete')}</button></div></div>`;
   });
-  html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>Бекъпи на базата</span><button class="btn-outline btn-sm" onclick="createBackup()">Създай бекъп сега</button></div>`;
+  html+=`<div class="sect-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px"><span>${t('backups')}</span><button class="btn-outline btn-sm" onclick="createBackup()">${t('create_backup_now')}</button></div>`;
   if(!backups.length){
-    html+=`<div style="font-size:12px;color:#8b949e;padding:12px">Все още няма бекъпи. Системата автоматично прави дневни бекъпи.</div>`;
+    html+=`<div style="font-size:12px;color:#8b949e;padding:12px">${t('no_backups_yet')}</div>`;
   } else {
     backups.slice(0,10).forEach(b=>{
       const dt = new Date(b.created*1000);
       const when = `${dt.toLocaleDateString('bg-BG')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
       const sizeKB = (b.size/1024).toFixed(1);
       html+=`<div class="backup-row"><div><div class="backup-name">${b.name}</div><div class="backup-size">${when} · ${sizeKB} KB</div></div>
-        <div class="backup-actions"><a href="/api/backups/download/${b.name}" class="btn-outline btn-sm" download>Свали</a></div></div>`;
+        <div class="backup-actions"><a href="/api/backups/download/${b.name}" class="btn-outline btn-sm" download>${t('download')}</a></div></div>`;
     });
-    if(backups.length>10) html+=`<div style="font-size:11px;color:#8b949e;padding:6px;text-align:center">Показани 10 от ${backups.length} бекъпа</div>`;
+    if(backups.length>10) html+=`<div style="font-size:11px;color:#8b949e;padding:6px;text-align:center">${t('showing_backups')} ${backups.length} ${t('backups_count')}</div>`;
   }
   document.getElementById('v-admin').innerHTML=html;
 }
@@ -1037,29 +1278,29 @@ window.createBackup = async function() {
   const d = await r.json();
   if (d.ok) loadAdmin();
 };
-window.openAddUser=function(){openModal('Нов служител',`<label>Име (кирилица)</label><input type="text" id="nu-name" class="modal-input" placeholder="Иван Петров"><label>Потребителско име (латиница)</label><input type="text" id="nu-user" class="modal-input" placeholder="ivan.petrov"><label>Парола</label><input type="text" id="nu-pass" class="modal-input" value="1234"><label>Роля</label><select id="nu-role" class="modal-input"><option value="employee">Служител</option><option value="manager">Мениджър</option></select><label>Цвят</label><input type="color" id="nu-color" class="modal-input" value="#58a6ff"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveNewUser()">Добави</button></div>`);};
-window.saveNewUser=async function(){const name=document.getElementById('nu-name').value.trim(),username=document.getElementById('nu-user').value.trim();if(!name||!username){alert('Попълни име и потребителско име');return;}const res=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,username,password:document.getElementById('nu-pass').value||'1234',role:document.getElementById('nu-role').value,color:document.getElementById('nu-color').value})});const data=await res.json();if(data.error==='username_taken'){alert('Потребителското име вече съществува!');return;}closeModal();location.reload();};
-window.openEditUser=function(id,name,username,color,role){openModal('Редактиране',`<label>Име</label><input type="text" id="eu-name" class="modal-input" value="${name}"><label>Потребителско име</label><input type="text" id="eu-user" class="modal-input" value="${username}"><label>Нова парола (празно = без промяна)</label><input type="text" id="eu-pass" class="modal-input" placeholder="Нова парола..."><label>Роля</label><select id="eu-role" class="modal-input"><option value="employee" ${role==='employee'?'selected':''}>Служител</option><option value="manager" ${role==='manager'?'selected':''}>Мениджър</option></select><label>Цвят</label><input type="color" id="eu-color" class="modal-input" value="${color}"><div style="margin-top:14px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px"><div style="font-size:11px;color:#8b949e;margin-bottom:6px">Забравена парола?</div><button class="btn-outline btn-sm" onclick="resetUserPassword(${id},'${name.replace(/'/g,"\\'")}')">Генерирай нова парола</button></div><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditUser(${id})">Запази</button></div>`);};
+window.openAddUser=function(){openModal(t('new_employee'),`<label>${t('name_cyrillic')}</label><input type="text" id="nu-name" class="modal-input" placeholder=""><label>${t('username_latin')}</label><input type="text" id="nu-user" class="modal-input" placeholder=""><label>${t('password')}</label><input type="text" id="nu-pass" class="modal-input" value="1234"><label>${t('role')}</label><select id="nu-role" class="modal-input"><option value="employee">${t('role_employee')}</option><option value="manager">${t('role_manager')}</option></select><label>${t('color')}</label><input type="color" id="nu-color" class="modal-input" value="#58a6ff"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveNewUser()">${t('add')}</button></div>`);};
+window.saveNewUser=async function(){const name=document.getElementById('nu-name').value.trim(),username=document.getElementById('nu-user').value.trim();if(!name||!username){alert(t('fill_name_username'));return;}const res=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,username,password:document.getElementById('nu-pass').value||'1234',role:document.getElementById('nu-role').value,color:document.getElementById('nu-color').value})});const data=await res.json();if(data.error==='username_taken'){alert(t('username_taken'));return;}closeModal();location.reload();};
+window.openEditUser=function(id,name,username,color,role){openModal(t('edit'),`<label>${t('name')}</label><input type="text" id="eu-name" class="modal-input" value="${name}"><label>${t('username_latin')}</label><input type="text" id="eu-user" class="modal-input" value="${username}"><label>${t('new_password_blank')}</label><input type="text" id="eu-pass" class="modal-input" placeholder="${t('new_password_placeholder')}"><label>${t('role')}</label><select id="eu-role" class="modal-input"><option value="employee" ${role==='employee'?'selected':''}>${t('role_employee')}</option><option value="manager" ${role==='manager'?'selected':''}>${t('role_manager')}</option></select><label>${t('color')}</label><input type="color" id="eu-color" class="modal-input" value="${color}"><div style="margin-top:14px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px"><div style="font-size:11px;color:#8b949e;margin-bottom:6px">${t('forgot_password')}</div><button class="btn-outline btn-sm" onclick="resetUserPassword(${id},'${name.replace(/'/g,"\\'")}')">${t('generate_new_password')}</button></div><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditUser(${id})">${t('save')}</button></div>`);};
 window.resetUserPassword = async function(id, name) {
-  if (!confirm(`Сигурен ли си, че искаш да генерираш нова парола за "${name}"? Старата парола вече няма да работи.`)) return;
+  if (!confirm(`${t('sure_reset_password')} "${name}"? ${t('old_password_will_not_work')}`)) return;
   const r = await fetch(`/api/users/${id}/reset-password`, {method:'POST'});
   const d = await r.json();
   if (d.new_password) {
-    openModal('Нова парола генерирана', `
+    openModal(t('new_password_generated'), `
       <div style="text-align:center;padding:10px 0">
-        <div style="font-size:13px;color:#8b949e;margin-bottom:14px">Дай тази парола на ${name}. Тя няма да бъде показана отново.</div>
+        <div style="font-size:13px;color:#8b949e;margin-bottom:14px">${t('give_password_to')} ${name}. ${t('not_shown_again')}</div>
         <div style="font-size:24px;font-weight:600;color:#c6a350;background:#161b22;padding:16px;border-radius:10px;border:1px solid rgba(198,163,80,.3);font-family:monospace;letter-spacing:2px">${d.new_password}</div>
-        <div style="font-size:11px;color:#8b949e;margin-top:12px">Препоръка: помоли служителя да я смени при първи вход.</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:12px">${t('suggest_change_first_login')}</div>
       </div>
-      <div class="modal-actions"><button class="btn-primary" onclick="closeModal()">Затвори</button></div>
+      <div class="modal-actions"><button class="btn-primary" onclick="closeModal()">${t('close')}</button></div>
     `);
   }
 };
 window.saveEditUser=async function(id){const data={display_name:document.getElementById('eu-name').value.trim(),username:document.getElementById('eu-user').value.trim(),color:document.getElementById('eu-color').value,role:document.getElementById('eu-role').value};const pass=document.getElementById('eu-pass').value.trim();if(pass)data.password=pass;await fetch(`/api/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});closeModal();location.reload();};
-window.deleteUser=async function(id,name){if(!confirm(`Изтриване на "${name}"? Задачите му ще останат без отговорник.`))return;await fetch(`/api/users/${id}`,{method:'DELETE'});location.reload();};
-window.openEditProject=function(id,name,color){openModal('Редактиране',`<label>Име</label><input type="text" id="ep-name" class="modal-input" value="${name}"><label>Цвят</label><input type="color" id="ep-color" class="modal-input" value="${color}"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveEditProject(${id})">Запази</button></div>`);};
+window.deleteUser=async function(id,name){if(!confirm(`${t('delete_employee')} "${name}"? ${t('delete_user_warn')}`))return;await fetch(`/api/users/${id}`,{method:'DELETE'});location.reload();};
+window.openEditProject=function(id,name,color){openModal(t('edit'),`<label>${t('name')}</label><input type="text" id="ep-name" class="modal-input" value="${name}"><label>${t('color')}</label><input type="color" id="ep-color" class="modal-input" value="${color}"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditProject(${id})">${t('save')}</button></div>`);};
 window.saveEditProject=async function(id){await fetch(`/api/projects/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('ep-name').value.trim(),color:document.getElementById('ep-color').value})});closeModal();location.reload();};
-window.deleteProject=async function(id,name){if(!confirm(`Изтриване на проект "${name}"?`))return;await fetch(`/api/projects/${id}`,{method:'DELETE'});location.reload();};
+window.deleteProject=async function(id,name){if(!confirm(`${t('delete_project_warn')} "${name}"?`))return;await fetch(`/api/projects/${id}`,{method:'DELETE'});location.reload();};
 
 window.openVisibility=async function(managerId, managerName){
   const [usersRes, visRes] = await Promise.all([fetch('/api/users'), fetch(`/api/visibility/${managerId}`)]);
@@ -1067,10 +1308,10 @@ window.openVisibility=async function(managerId, managerName){
   const visible = await visRes.json();
   const employees = users.filter(u => u.role === 'employee');
   const checks = employees.map(u => `<label style="display:flex;align-items:center;gap:10px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="vis-cb" data-id="${u.id}" ${visible.includes(u.id)?'checked':''} style="width:18px;height:18px;cursor:pointer"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><span style="color:#e6edf3;font-size:13px">${u.display_name}</span></label>`).join('');
-  openModal(`Видимост на отчети — ${managerName}`, `
-    <div style="font-size:12px;color:#8b949e;margin-bottom:12px">Избери чии отчети може да вижда този мениджър:</div>
-    ${checks || '<div style="color:#8b949e;font-size:13px">Няма служители</div>'}
-    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Откажи</button><button class="btn-primary" onclick="saveVisibility(${managerId})">Запази</button></div>
+  openModal(`${t('visibility_for')} ${managerName}`, `
+    <div style="font-size:12px;color:#8b949e;margin-bottom:12px">${t('visibility_help')}</div>
+    ${checks || '<div style="color:#8b949e;font-size:13px">${t('no_employees')}</div>'}
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveVisibility(${managerId})">${t('save')}</button></div>
   `);
 };
 window.saveVisibility=async function(managerId){
