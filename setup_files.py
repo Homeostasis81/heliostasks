@@ -857,7 +857,7 @@ function renderKanban() {
   let tasks = allTasks;
   if (kFilter !== 'all') tasks = tasks.filter(t => t.priority === kFilter);
   let html = `<div class="filters">${['all','critical','high','medium','low'].map(f =>
-    `<button class="fbtn ${kFilter===f?'active':''}" onclick="kFilter='${f}';renderKanban()">${f==='all'?'${t('f_all')}':PL[f]}</button>`
+    `<button class="fbtn ${kFilter===f?'active':''}" onclick="kFilter='${f}';renderKanban()">${f==='all'?t('f_all'):PL[f]}</button>`
   ).join('')}</div><div class="kanban">`;
   ['todo','progress','review','done'].forEach(s => {
     const ft = tasks.filter(t => t.status === s);
@@ -1210,7 +1210,7 @@ window.showTaskHistory = async function(tid) {
   if (container.innerHTML) { container.innerHTML = ''; return; }
   const res = await fetch(`/api/audit/task/${tid}`);
   const log = await res.json();
-  if (!log.length) { container.innerHTML = '<div style="font-size:11px;color:#8b949e;padding:8px 0">${t('no_history')}</div>'; return; }
+  if (!log.length) { container.innerHTML = `<div style="font-size:11px;color:#8b949e;padding:8px 0">${t('no_history')}</div>`; return; }
   const actionLabels = {created:t('a_created'), updated:t('a_updated'), deleted:t('a_deleted'), reset_password:t('a_reset_password')};
   const fieldLabels = {title:t('f_title'), description:t('f_description'), priority:t('f_priority'), status:t('f_status'), assignee_id:t('f_assignee_id'), project_id:t('f_project_id'), due_date:t('f_due_date')};
   let html = '<div class="audit-list">';
@@ -1308,9 +1308,10 @@ window.openVisibility=async function(managerId, managerName){
   const visible = await visRes.json();
   const employees = users.filter(u => u.role === 'employee');
   const checks = employees.map(u => `<label style="display:flex;align-items:center;gap:10px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="vis-cb" data-id="${u.id}" ${visible.includes(u.id)?'checked':''} style="width:18px;height:18px;cursor:pointer"><span class="avatar-sm" style="background:${u.color}">${u.initials}</span><span style="color:#e6edf3;font-size:13px">${u.display_name}</span></label>`).join('');
+  const checksHtml = checks || `<div style="color:#8b949e;font-size:13px">${t('no_employees')}</div>`;
   openModal(`${t('visibility_for')} ${managerName}`, `
     <div style="font-size:12px;color:#8b949e;margin-bottom:12px">${t('visibility_help')}</div>
-    ${checks || '<div style="color:#8b949e;font-size:13px">${t('no_employees')}</div>'}
+    ${checksHtml}
     <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveVisibility(${managerId})">${t('save')}</button></div>
   `);
 };
