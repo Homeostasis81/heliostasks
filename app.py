@@ -698,8 +698,22 @@ async def delete_user(request: Request, uid: int):
     with get_db() as db:
         u = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         if not u or u["role"] == "ceo": return JSONResponse({"error": "cannot delete"}, 403)
+        # Clean all FK references before deleting
         db.execute("UPDATE tasks SET assignee_id=NULL WHERE assignee_id=?", (uid,))
+        db.execute("UPDATE tasks SET created_by=NULL WHERE created_by=?", (uid,))
         db.execute("DELETE FROM task_collaborators WHERE user_id=?", (uid,))
+        # Clean reports
+        report_ids = [r["id"] for r in db.execute("SELECT id FROM daily_reports WHERE user_id=?", (uid,)).fetchall()]
+        for rid in report_ids:
+            db.execute("DELETE FROM report_items WHERE report_id=?", (rid,))
+            db.execute("DELETE FROM report_notes WHERE report_id=?", (rid,))
+        db.execute("DELETE FROM daily_reports WHERE user_id=?", (uid,))
+        # Clean leave
+        db.execute("DELETE FROM leave_requests WHERE user_id=?", (uid,))
+        db.execute("DELETE FROM leave_balances WHERE user_id=?", (uid,))
+        # Clean visibility
+        db.execute("DELETE FROM report_visibility WHERE manager_id=? OR employee_id=?", (uid, uid))
+        # Finally delete user
         db.execute("DELETE FROM users WHERE id=?", (uid,))
     return JSONResponse({"ok": True})
 

@@ -1737,6 +1737,7 @@ window.saveLeaveBalance = async function(uid) {
   const paid_total = parseInt(document.getElementById('lb-total').value);
   await fetch(`/api/leave/balance/${uid}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({year, paid_total})});
   closeModal();
+  loadAdmin();
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
