@@ -965,8 +965,8 @@ async def create_leave_request(request: Request):
             if wd > bal["remaining"]:
                 return JSONResponse({"error": "insufficient_balance", "remaining": bal["remaining"], "requested": wd}, 400)
     with get_db() as db:
-        # Auto-approve if CEO creates for anyone, or for non-paid types where company often just records
-        auto_approve = is_ceo(user) and target_user_id != user["id"]
+        # Auto-approve all CEO leave requests (CEO doesn't need approval)
+        auto_approve = is_ceo(user)
         status = "approved" if auto_approve else "pending"
         r = db.execute("""INSERT INTO leave_requests
             (user_id, leave_type, start_date, end_date, working_days, reason, status, approved_by, decided_at)
