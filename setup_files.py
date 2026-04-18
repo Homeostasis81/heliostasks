@@ -584,6 +584,8 @@ const I18N = {
     // Admin
     employees: 'Служители', projects_admin: 'Проекти', new_employee_btn: '+ Нов служител',
     backups: 'Бекъпи на базата', create_backup_now: 'Създай бекъп сега',
+    restore_backup: 'Възстанови от файл', restore_confirm: 'ВНИМАНИЕ: Текущата база ще бъде заменена! Автоматично ще се направи бекъп преди възстановяването. Продължаване?',
+    restore_success: 'Базата е възстановена успешно. Моля, опреснете страницата.', restore_failed: 'Грешка при възстановяване', restore_invalid: 'Невалиден файл — трябва да е SQLite база (.db)',
     no_backups_yet: 'Все още няма бекъпи. Системата автоматично прави дневни бекъпи.',
     showing_backups: 'Показани 10 от', backups_count: 'бекъпа',
     delete_user_warn: 'Задачите му ще останат без отговорник.',
@@ -715,6 +717,8 @@ const I18N = {
     tasks_total: 'total tasks', percent_done: '% done',
     employees: 'Employees', projects_admin: 'Projects', new_employee_btn: '+ New employee',
     backups: 'Database backups', create_backup_now: 'Create backup now',
+    restore_backup: 'Restore from file', restore_confirm: 'WARNING: Current database will be replaced! An automatic backup will be made before restoring. Continue?',
+    restore_success: 'Database restored successfully. Please refresh the page.', restore_failed: 'Restore failed', restore_invalid: 'Invalid file — must be a SQLite database (.db)',
     no_backups_yet: 'No backups yet. The system creates daily backups automatically.',
     showing_backups: 'Showing 10 of', backups_count: 'backups',
     delete_user_warn: 'Their tasks will remain without an assignee.',
@@ -871,6 +875,18 @@ function toggleOnlyMine(){
   if (curView === 'kanban') renderKanban();
   else if (curView === 'list') renderList();
   else if (curView === 'calendar') loadCalendar();
+}
+
+async function refreshGlobals(){
+  const [ur, ar, pr] = await Promise.all([
+    fetch('/api/users'),
+    fetch('/api/users?include_all=1'),
+    fetch('/api/projects/list')
+  ]);
+  const u = await ur.json(); const a = await ar.json(); const p = await pr.json();
+  USERS.length = 0; u.forEach(x => USERS.push(x));
+  ALL_USERS.length = 0; a.forEach(x => ALL_USERS.push(x));
+  PROJECTS.length = 0; p.forEach(x => PROJECTS.push(x));
 }
 let calMonth, calYear;
 
@@ -1634,7 +1650,7 @@ window.deleteTask=async function(id){
   closeModal();await loadTasks();switchView(curView);
 };
 window.openProjectModal=function(){openModal(t('new_project'),`<label>${t('name')}</label><input type="text" id="np-name" class="modal-input" placeholder=""><label>${t('color')}</label><input type="color" id="np-color" class="modal-input" value="#c6a350"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveProject()">${t('create')}</button></div>`);};
-window.saveProject=async function(){const name=document.getElementById('np-name').value.trim();if(!name)return;await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,color:document.getElementById('np-color').value})});closeModal();location.reload();};
+window.saveProject=async function(){const name=document.getElementById('np-name').value.trim();if(!name)return;await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,color:document.getElementById('np-color').value})});closeModal();await refreshGlobals();loadAdmin();};
 
 // === ADMIN ===
 async function loadAdmin(){
@@ -1665,6 +1681,13 @@ async function loadAdmin(){
     });
     if(backups.length>10) html+=`<div style="font-size:11px;color:#8b949e;padding:6px;text-align:center">${t('showing_backups')} ${backups.length} ${t('backups_count')}</div>`;
   }
+  html+=`<div style="margin-top:14px;padding:14px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:10px">
+    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">${t('restore_backup')}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="restore-file" accept=".db" style="font-size:12px;color:var(--text-secondary);flex:1;min-width:200px">
+      <button class="btn-danger btn-sm" style="margin:0" onclick="restoreBackup()">${t('restore_backup')}</button>
+    </div>
+  </div>`;
   document.getElementById('v-admin').innerHTML=html;
 }
 window.createBackup = async function() {
@@ -1672,8 +1695,25 @@ window.createBackup = async function() {
   const d = await r.json();
   if (d.ok) loadAdmin();
 };
+window.restoreBackup = async function() {
+  const input = document.getElementById('restore-file');
+  if (!input || !input.files.length) return;
+  const file = input.files[0];
+  if (!file.name.endsWith('.db')) { alert(t('restore_invalid')); return; }
+  if (!confirm(t('restore_confirm'))) { input.value=''; return; }
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const r = await fetch('/api/backups/restore', {method:'POST', body: form});
+    const d = await r.json();
+    if (d.ok) { alert(t('restore_success')); location.reload(); }
+    else if (d.error === 'not_sqlite' || d.error === 'invalid_schema') { alert(t('restore_invalid')); }
+    else { alert(t('restore_failed') + ': ' + (d.error||'')); }
+  } catch(e) { alert(t('restore_failed')); }
+  input.value='';
+};
 window.openAddUser=function(){openModal(t('new_employee'),`<label>${t('name_cyrillic')}</label><input type="text" id="nu-name" class="modal-input" placeholder=""><label>${t('username_latin')}</label><input type="text" id="nu-user" class="modal-input" placeholder=""><label>${t('password')}</label><input type="text" id="nu-pass" class="modal-input" value="1234"><label>${t('role')}</label><select id="nu-role" class="modal-input"><option value="employee">${t('role_employee')}</option><option value="manager">${t('role_manager')}</option></select><label>${t('color')}</label><input type="color" id="nu-color" class="modal-input" value="#58a6ff"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveNewUser()">${t('add')}</button></div>`);};
-window.saveNewUser=async function(){const name=document.getElementById('nu-name').value.trim(),username=document.getElementById('nu-user').value.trim();if(!name||!username){alert(t('fill_name_username'));return;}const res=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,username,password:document.getElementById('nu-pass').value||'1234',role:document.getElementById('nu-role').value,color:document.getElementById('nu-color').value})});const data=await res.json();if(data.error==='username_taken'){alert(t('username_taken'));return;}closeModal();location.reload();};
+window.saveNewUser=async function(){const name=document.getElementById('nu-name').value.trim(),username=document.getElementById('nu-user').value.trim();if(!name||!username){alert(t('fill_name_username'));return;}const res=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:name,username,password:document.getElementById('nu-pass').value||'1234',role:document.getElementById('nu-role').value,color:document.getElementById('nu-color').value})});const data=await res.json();if(data.error==='username_taken'){alert(t('username_taken'));return;}closeModal();await refreshGlobals();loadAdmin();};
 window.openEditUser=function(id,name,username,color,role){openModal(t('edit'),`<label>${t('name')}</label><input type="text" id="eu-name" class="modal-input" value="${name}"><label>${t('username_latin')}</label><input type="text" id="eu-user" class="modal-input" value="${username}"><label>${t('new_password_blank')}</label><input type="text" id="eu-pass" class="modal-input" placeholder="${t('new_password_placeholder')}"><label>${t('role')}</label><select id="eu-role" class="modal-input"><option value="employee" ${role==='employee'?'selected':''}>${t('role_employee')}</option><option value="manager" ${role==='manager'?'selected':''}>${t('role_manager')}</option></select><label>${t('color')}</label><input type="color" id="eu-color" class="modal-input" value="${color}"><div style="margin-top:14px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px"><div style="font-size:11px;color:#8b949e;margin-bottom:6px">${t('forgot_password')}</div><button class="btn-outline btn-sm" onclick="resetUserPassword(${id},'${name.replace(/'/g,"\\'")}')">${t('generate_new_password')}</button></div><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditUser(${id})">${t('save')}</button></div>`);};
 window.resetUserPassword = async function(id, name) {
   if (!confirm(`${t('sure_reset_password')} "${name}"? ${t('old_password_will_not_work')}`)) return;
@@ -1690,11 +1730,11 @@ window.resetUserPassword = async function(id, name) {
     `);
   }
 };
-window.saveEditUser=async function(id){const data={display_name:document.getElementById('eu-name').value.trim(),username:document.getElementById('eu-user').value.trim(),color:document.getElementById('eu-color').value,role:document.getElementById('eu-role').value};const pass=document.getElementById('eu-pass').value.trim();if(pass)data.password=pass;await fetch(`/api/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});closeModal();location.reload();};
-window.deleteUser=async function(id,name){if(!confirm(`${t('delete_employee')} "${name}"? ${t('delete_user_warn')}`))return;await fetch(`/api/users/${id}`,{method:'DELETE'});location.reload();};
+window.saveEditUser=async function(id){const data={display_name:document.getElementById('eu-name').value.trim(),username:document.getElementById('eu-user').value.trim(),color:document.getElementById('eu-color').value,role:document.getElementById('eu-role').value};const pass=document.getElementById('eu-pass').value.trim();if(pass)data.password=pass;await fetch(`/api/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});closeModal();await refreshGlobals();loadAdmin();};
+window.deleteUser=async function(id,name){if(!confirm(`${t('delete_employee')} "${name}"? ${t('delete_user_warn')}`))return;await fetch(`/api/users/${id}`,{method:'DELETE'});await refreshGlobals();loadAdmin();};
 window.openEditProject=function(id,name,color){openModal(t('edit'),`<label>${t('name')}</label><input type="text" id="ep-name" class="modal-input" value="${name}"><label>${t('color')}</label><input type="color" id="ep-color" class="modal-input" value="${color}"><div class="modal-actions"><button class="btn-outline" onclick="closeModal()">${t('cancel')}</button><button class="btn-primary" onclick="saveEditProject(${id})">${t('save')}</button></div>`);};
-window.saveEditProject=async function(id){await fetch(`/api/projects/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('ep-name').value.trim(),color:document.getElementById('ep-color').value})});closeModal();location.reload();};
-window.deleteProject=async function(id,name){if(!confirm(`${t('delete_project_warn')} "${name}"?`))return;await fetch(`/api/projects/${id}`,{method:'DELETE'});location.reload();};
+window.saveEditProject=async function(id){await fetch(`/api/projects/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('ep-name').value.trim(),color:document.getElementById('ep-color').value})});closeModal();await refreshGlobals();loadAdmin();};
+window.deleteProject=async function(id,name){if(!confirm(`${t('delete_project_warn')} "${name}"?`))return;await fetch(`/api/projects/${id}`,{method:'DELETE'});await refreshGlobals();loadAdmin();};
 
 window.openVisibility=async function(managerId, managerName){
   const [usersRes, visRes] = await Promise.all([fetch('/api/users'), fetch(`/api/visibility/${managerId}`)]);

@@ -832,6 +832,57 @@ async def download_backup(request: Request, name: str):
     if not os.path.exists(fp): return JSONResponse({"error": "not_found"}, 404)
     return FileResponse(fp, filename=name, media_type="application/octet-stream")
 
+@app.post("/api/backups/restore")
+async def restore_backup(request: Request):
+    """CEO only: restore database from uploaded .db file. Auto-backup before restore."""
+    from fastapi import UploadFile, File
+    user = current_user(request)
+    if not user or not is_ceo(user): return JSONResponse({"error": "forbidden"}, 403)
+
+    form = await request.form()
+    upload = form.get("file")
+    if not upload or not hasattr(upload, 'read'):
+        return JSONResponse({"error": "no_file"}, 400)
+
+    content = await upload.read()
+    if len(content) < 100:
+        return JSONResponse({"error": "file_too_small"}, 400)
+
+    # Validate it's a real SQLite file (magic bytes)
+    if content[:16] != b'SQLite format 3\x00':
+        return JSONResponse({"error": "not_sqlite"}, 400)
+
+    # Validate by opening it and checking for users table
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
+    tmp.write(content)
+    tmp.close()
+    try:
+        test_conn = sqlite3.connect(tmp.name)
+        test_conn.row_factory = sqlite3.Row
+        tables = [r[0] for r in test_conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        test_conn.close()
+        required = {'users', 'tasks', 'projects'}
+        if not required.issubset(set(tables)):
+            os.unlink(tmp.name)
+            return JSONResponse({"error": "invalid_schema", "missing": list(required - set(tables))}, 400)
+    except Exception:
+        os.unlink(tmp.name)
+        return JSONResponse({"error": "corrupt_file"}, 400)
+
+    # Auto-backup current DB before restore
+    backup_path = backup_db()
+
+    # Replace current DB
+    try:
+        shutil.copy2(tmp.name, DB_PATH)
+        os.unlink(tmp.name)
+    except Exception as e:
+        os.unlink(tmp.name)
+        return JSONResponse({"error": "restore_failed", "detail": str(e)}, 500)
+
+    return JSONResponse({"ok": True, "auto_backup": os.path.basename(backup_path) if backup_path else None})
+
 # === Leave requests ===
 VALID_LEAVE_TYPES = ("paid", "sick", "unpaid", "other")
 
