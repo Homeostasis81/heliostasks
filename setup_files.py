@@ -520,6 +520,7 @@ const IS_CEO = {{ "true" if is_ceo else "false" }};
 const IS_MANAGER = {{ "true" if is_manager else "false" }};
 const USER_ROLE = "{{ user_role }}";
 const USER_ID = {{ user.id }};
+const USER_NAME = "{{ user.display_name }}";
 const USERS = {{ users | tojson }};
 const ALL_USERS = {{ all_users | tojson }};
 const PROJECTS = {{ projects | tojson }};
@@ -665,7 +666,7 @@ const I18N = {
     leave_sure_reject: 'Отхвърли ли заявката?',
     leave_pending_notif: 'Заявки за одобрение',
     leave_set_balance: 'Настрой баланс',
-    leave_balance_for: 'Баланс за',
+    leave_balance_for: 'Баланс за', leave_edit_balance: 'Промени баланс',
     leave_year: 'Година',
     leave_total_days: 'Общо дни',
   },
@@ -792,7 +793,7 @@ const I18N = {
     leave_sure_reject: 'Reject the request?',
     leave_pending_notif: 'Pending requests',
     leave_set_balance: 'Set balance',
-    leave_balance_for: 'Balance for',
+    leave_balance_for: 'Balance for', leave_edit_balance: 'Edit balance',
     leave_year: 'Year',
     leave_total_days: 'Total days',
   }
@@ -1348,6 +1349,9 @@ async function loadLeave() {
   </div>`;
 
   html += `<button class="btn-primary" onclick="openLeaveRequestModal()" style="margin-bottom:18px">${t('new_leave_request')}</button>`;
+  if (IS_CEO) {
+    html += ` <button class="btn-outline btn-sm" onclick="openLeaveBalance(${USER_ID},'${USER_NAME.replace(/'/g,"\\'")}')" style="margin-bottom:18px;margin-left:8px">${t('leave_edit_balance')}</button>`;
+  }
 
   // Pending section for CEO/manager
   const pending = reqs.filter(r => r.status === 'pending' && r.user_id !== USER_ID);
@@ -1378,7 +1382,7 @@ async function loadLeave() {
 function leaveRequestCard(r, showActions, typeLabels, statusLabels) {
   const typeColor = LEAVE_TYPE_COLORS[r.leave_type];
   const statusColor = LEAVE_STATUS_COLORS[r.status];
-  const canCancel = r.user_id === USER_ID && r.status === 'pending';
+  const canCancel = (r.user_id === USER_ID && r.status === 'pending') || (IS_CEO && r.user_id === USER_ID);
   const isMine = r.user_id === USER_ID;
   const dateRange = r.start_date === r.end_date ? r.start_date : `${r.start_date} → ${r.end_date}`;
   const reasonHtml = r.reason ? `<div style="font-size:12px;color:#8b949e;margin-top:6px;font-style:italic">"${r.reason}"</div>` : '';
@@ -1777,7 +1781,8 @@ window.saveLeaveBalance = async function(uid) {
   const paid_total = parseInt(document.getElementById('lb-total').value);
   await fetch(`/api/leave/balance/${uid}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({year, paid_total})});
   closeModal();
-  loadAdmin();
+  if (curView === 'admin') loadAdmin();
+  if (curView === 'leave') loadLeave();
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
